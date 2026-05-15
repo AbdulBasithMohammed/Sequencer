@@ -22,7 +22,7 @@ export function Wordmark({
       <img
         src="/wordmark-icon.png"
         alt=""
-        aria-hiddens
+        aria-hidden
         width={iconSize}
         height={iconSize}
         style={{ display: "block", flexShrink: 0 }}
