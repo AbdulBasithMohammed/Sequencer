@@ -4,6 +4,7 @@ import { signOutAction } from "@/lib/auth/actions";
 import { Wordmark } from "@/components/ui/wordmark";
 import { CreateRoomCard, JoinRoomCard } from "./play-forms";
 import { KickBanToast } from "./kick-ban-toast";
+import { NoticeToast } from "./notice-toast";
 
 export const metadata = {
   title: "Lobby — Sequencr",
@@ -12,9 +13,9 @@ export const metadata = {
 export default async function PlayPage({
   searchParams,
 }: {
-  searchParams: Promise<{ kicked?: string; banned?: string }>;
+  searchParams: Promise<{ kicked?: string; banned?: string; notice?: string }>;
 }) {
-  const { kicked, banned } = await searchParams;
+  const { kicked, banned, notice } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -80,6 +81,7 @@ export default async function PlayPage({
         {(banned || kicked) && (
           <KickBanToast banned={banned} kicked={kicked} />
         )}
+        {notice && !banned && !kicked && <NoticeToast notice={notice} />}
 
         <div className="mb-6">
           <div className="text-[13px] font-semibold text-ink-soft">

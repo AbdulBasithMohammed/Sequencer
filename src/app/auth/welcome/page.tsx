@@ -61,7 +61,11 @@ export default async function WelcomePage() {
           start playing.
         </p>
 
-        <SoftLinkButton variant="primary" href="/play" trailing={<span aria-hidden>→</span>}>
+        <SoftLinkButton
+          variant="primary"
+          href="/play?notice=verified"
+          trailing={<span aria-hidden>→</span>}
+        >
           Start playing
         </SoftLinkButton>
       </div>
