@@ -137,7 +137,17 @@ export function LobbyRefresher({
           if (gameId) router.push(`/game/${gameId}`);
         },
       )
-      .subscribe();
+      // Subscribe-and-reconcile. The server-rendered snapshot was taken
+      // before this channel was listening, so any event that fired in the
+      // gap between page render and the channel reaching SUBSCRIBED state
+      // (typically 200–1000 ms) is lost. Re-fetching once the moment we're
+      // subscribed catches those missed events. Also re-runs on any
+      // reconnect (socket drop + auto-rejoin) for free.
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          flushAndRefresh(router);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
