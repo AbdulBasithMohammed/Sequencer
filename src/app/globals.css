@@ -1,0 +1,142 @@
+@import "tailwindcss";
+
+@theme {
+  /* Soft Set palette */
+  --color-canvas: #fff4e8;
+  --color-surface: #fffbf3;
+  --color-ink: #1b1530;
+  --color-ink-soft: #5c5470;
+  --color-line: #e8decc;
+  --color-pink: #ff5c8a;
+  --color-blue: #5b7cfa;
+  --color-butter: #ffd23f;
+  --color-mint: #7bd8b5;
+  --color-line-strong: #efe3ce;
+
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-body: var(--font-jakarta), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Animations */
+  --animate-seq-float: seq-float 6s ease-in-out infinite;
+  --animate-seq-bob: seq-bob 4.8s ease-in-out infinite;
+  --animate-seq-pulse: seq-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes seq-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes seq-bob {
+  0%, 100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+}
+
+@keyframes seq-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
+}
+
+@keyframes seq-drop {
+  0% {
+    transform: translateY(-30px) scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: translateY(4px) scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Suit-dancing keyframes — each suit moves differently for organic motion. */
+@keyframes suit-dance-1 {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50%      { transform: translateY(-18px) rotate(4deg); }
+}
+@keyframes suit-dance-2 {
+  0%      { transform: translate(0, 0) rotate(0deg); }
+  25%     { transform: translate(14px, -20px) rotate(10deg); }
+  50%     { transform: translate(0, -8px) rotate(0deg); }
+  75%     { transform: translate(-14px, -20px) rotate(-10deg); }
+  100%    { transform: translate(0, 0) rotate(0deg); }
+}
+@keyframes suit-dance-3 {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.1) rotate(-8deg); }
+}
+@keyframes suit-dance-4 {
+  0%      { transform: translate(0, 0) rotate(0deg); }
+  33%     { transform: translate(-12px, 12px) rotate(-6deg); }
+  66%     { transform: translate(22px, 6px) rotate(10deg); }
+  100%    { transform: translate(0, 0) rotate(0deg); }
+}
+
+/* Force light cream — designed for one mode. */
+:root {
+  color-scheme: light;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+
+/* iOS Safari: kill the 300ms tap delay and prevent double-tap-to-zoom on
+   interactive controls so single taps register instantly. Inputs keep their
+   native double-tap zoom suppressed too, which matches the design intent. */
+button,
+[role="button"],
+a,
+input,
+select,
+textarea,
+label {
+  touch-action: manipulation;
+}
+
+/* Make sure tap targets stay tall enough on touch. */
+@media (hover: none) {
+  button,
+  [role="button"] {
+    min-height: 32px;
+  }
+}
+
+::selection {
+  background: var(--color-pink);
+  color: white;
+}
+
+/* Reduced motion: disable looping animations; keep one-shot drop short. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
