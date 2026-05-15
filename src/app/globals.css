@@ -130,6 +130,104 @@ label {
   color: white;
 }
 
+/*
+ * Gameplay animations. Used by Board + HandStrip.
+ *   - chip-drop:  a placed chip falls in, overshoots, and settles.
+ *   - card-burn:  the played card flashes pink, then scales down + fades.
+ *   - card-deal:  a drawn replacement card flies in from the right (deck).
+ * card-burn and card-deal reference inline CSS vars (--tx/--ty/--rot/--scale)
+ * so they integrate with the fan layout's per-card transform.
+ */
+
+@keyframes chip-drop {
+  0% {
+    transform: translate(-50%, -220%) scale(0.9);
+    opacity: 0;
+  }
+  55% {
+    transform: translate(-50%, -50%) scale(1.18);
+    opacity: 1;
+  }
+  78% {
+    transform: translate(-50%, -50%) scale(0.92);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes card-burn {
+  0% {
+    transform: translate(var(--tx), var(--ty)) rotate(var(--rot))
+      scale(var(--scale));
+    opacity: 1;
+    filter: none;
+  }
+  18% {
+    transform: translate(var(--tx), var(--ty))
+      rotate(calc(var(--rot) + 2deg)) scale(calc(var(--scale) * 1.06));
+    filter: drop-shadow(0 0 14px var(--color-pink))
+      drop-shadow(0 -4px 22px var(--color-butter)) brightness(1.35) saturate(1.4);
+  }
+  40% {
+    transform: translate(var(--tx), var(--ty))
+      rotate(calc(var(--rot) - 1.5deg)) scale(calc(var(--scale) * 1.04));
+    filter: drop-shadow(0 -2px 20px var(--color-pink))
+      drop-shadow(0 -6px 32px var(--color-butter)) brightness(1.15) saturate(1.5);
+  }
+  65% {
+    transform: translate(var(--tx), var(--ty))
+      rotate(calc(var(--rot) + 1deg)) scale(calc(var(--scale) * 0.92));
+    opacity: 0.7;
+    filter: drop-shadow(0 -6px 24px var(--color-pink))
+      drop-shadow(0 -12px 40px var(--color-butter)) brightness(0.85) blur(1.5px);
+  }
+  85% {
+    transform: translate(var(--tx), var(--ty)) rotate(var(--rot))
+      scale(calc(var(--scale) * 0.8));
+    opacity: 0.32;
+    filter: drop-shadow(0 -10px 30px var(--color-pink))
+      drop-shadow(0 -16px 48px var(--color-butter)) brightness(0.65) blur(3px);
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) rotate(var(--rot))
+      scale(calc(var(--scale) * 0.66));
+    opacity: 0;
+    filter: drop-shadow(0 -14px 38px var(--color-pink))
+      drop-shadow(0 -20px 60px var(--color-butter)) brightness(0.45) blur(5px);
+  }
+}
+
+@keyframes ember {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 1;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--ex, 0px), -60px) scale(0.25);
+    opacity: 0;
+  }
+}
+
+@keyframes card-deal {
+  0% {
+    transform: translate(calc(var(--tx) + 220px), calc(var(--ty) - 40px))
+      rotate(20deg) scale(0.7);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--tx), var(--ty)) rotate(var(--rot))
+      scale(var(--scale));
+    opacity: 1;
+  }
+}
+
 /* Reduced motion: disable looping animations; keep one-shot drop short. */
 @media (prefers-reduced-motion: reduce) {
   *,

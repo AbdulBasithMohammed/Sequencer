@@ -2,6 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/ui/wordmark";
+import { type BoardState } from "@/components/game/board";
+import { type RosterPlayer } from "@/components/game/turn-banner";
+import { GameClient } from "./game-client";
+import { GameRefresher } from "./game-refresher";
 
 export const metadata = {
   title: "Game — Sequencr",
@@ -20,9 +24,14 @@ export default async function GamePage({
   } = await supabase.auth.getUser();
   if (!user) redirect("/auth?mode=signin");
 
+  // deck + hands are blocked at the column-grant layer (see Phase 3.A
+  // migration), so this select can never leak another player's hand even
+  // if a future caller forgets and asks for everything.
   const { data: game } = await supabase
     .from("games")
-    .select("id, status, started_at, room_id, rooms(code)")
+    .select(
+      "id, status, version, started_at, board, turn_seat, turn_deadline, room_id, rooms(code)",
+    )
     .eq("id", id)
     .maybeSingle();
   if (!game) redirect("/play");
@@ -30,16 +39,53 @@ export default async function GamePage({
   type GameRow = {
     id: string;
     status: string;
+    version: number;
     started_at: string;
+    board: BoardState;
+    turn_seat: number | null;
+    turn_deadline: string | null;
     room_id: string;
     rooms: { code: string } | { code: string }[] | null;
   };
   const g = game as unknown as GameRow;
   const roomCode = Array.isArray(g.rooms) ? g.rooms[0]?.code : g.rooms?.code;
 
+  const [{ data: rpRows }, { data: handData }] = await Promise.all([
+    supabase
+      .from("room_players")
+      .select("user_id, seat_index, team, profiles(display_name)")
+      .eq("room_id", g.room_id)
+      .order("seat_index"),
+    supabase.rpc("get_my_hand", { p_game_id: g.id }),
+  ]);
+
+  type RpRow = {
+    user_id: string;
+    seat_index: number;
+    team: number | null;
+    profiles:
+      | { display_name: string | null }
+      | { display_name: string | null }[]
+      | null;
+  };
+  const players: RosterPlayer[] = (rpRows ?? []).map((r: RpRow) => {
+    const prof = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles;
+    return {
+      user_id: r.user_id,
+      seat_index: r.seat_index,
+      team: r.team,
+      display_name: prof?.display_name ?? null,
+      is_me: r.user_id === user.id,
+    };
+  });
+
+  const hand: string[] = Array.isArray(handData) ? (handData as string[]) : [];
+
   return (
-    <div className="mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-7 lg:px-10">
-      <header className="mb-10 flex items-center justify-between">
+    <div className="mx-auto flex w-full max-w-[1240px] flex-1 flex-col px-6 py-6 lg:px-10">
+      <GameRefresher gameId={g.id} />
+
+      <header className="mb-6 flex items-center justify-between">
         <Link href="/" aria-label="Sequencr home">
           <Wordmark size={22} accent="pink" />
         </Link>
@@ -51,28 +97,31 @@ export default async function GamePage({
         </Link>
       </header>
 
-      <div className="flex flex-1 flex-col items-center justify-center text-center">
-        <div className="text-[12px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
-          Game started
-        </div>
-        <h1
-          className="mt-2 font-display font-bold leading-none"
-          style={{ fontSize: "clamp(32px, 4vw, 44px)", letterSpacing: "-0.03em" }}
-        >
-          Room <span className="text-pink">{roomCode ?? "?"}</span>
-        </h1>
-        <p className="mt-4 max-w-[420px] text-[14px] text-ink-soft">
-          Gameplay lands in Phase 3. For now this is the placeholder — the room
-          is locked, the <code className="font-mono text-[12px]">games</code>{" "}
-          row exists, and everyone is here.
-        </p>
-        <div className="mt-6 rounded-2xl border border-line bg-surface px-4 py-3 text-left">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.15em] text-ink-soft">
-            Game ID
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
+            Room
           </div>
-          <div className="mt-1 font-mono text-[13px] text-ink">{g.id}</div>
+          <div
+            className="font-mono font-bold leading-none text-ink"
+            style={{ fontSize: 28, letterSpacing: "0.06em" }}
+          >
+            {roomCode ?? "?"}
+          </div>
+        </div>
+        <div className="text-[12px] text-ink-soft">
+          v<span className="font-mono font-bold text-ink">{g.version}</span>
         </div>
       </div>
+
+      <GameClient
+        gameId={g.id}
+        gameVersion={g.version}
+        board={g.board}
+        turnSeat={g.turn_seat}
+        players={players}
+        hand={hand}
+      />
     </div>
   );
 }
