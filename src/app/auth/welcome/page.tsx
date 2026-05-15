@@ -5,7 +5,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { SoftLinkButton } from "@/components/ui/button";
 
 export const metadata = {
-  title: "Welcome to Sequencer",
+  title: "Welcome to Sequencr",
 };
 
 export default async function WelcomePage() {
@@ -28,7 +28,7 @@ export default async function WelcomePage() {
   return (
     <div className="mx-auto flex w-full max-w-[520px] flex-1 flex-col px-6 py-10">
       <header className="mb-12">
-        <Link href="/" aria-label="Sequencer home">
+        <Link href="/" aria-label="Sequencr home">
           <Wordmark size={24} accent="pink" />
         </Link>
       </header>

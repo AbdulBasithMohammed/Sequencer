@@ -6,7 +6,7 @@ import { CreateRoomCard, JoinRoomCard } from "./play-forms";
 import { KickBanToast } from "./kick-ban-toast";
 
 export const metadata = {
-  title: "Lobby — Sequencer",
+  title: "Lobby — Sequencr",
 };
 
 export default async function PlayPage({
@@ -35,7 +35,7 @@ export default async function PlayPage({
     <div className="grid flex-1 grid-cols-1 md:grid-cols-[300px_1fr]">
       {/* Sidebar */}
       <aside className="flex flex-col gap-2 border-r border-line p-7">
-        <Link href="/" className="mb-6" aria-label="Sequencer home">
+        <Link href="/" className="mb-6" aria-label="Sequencr home">
           <Wordmark size={22} accent="pink" />
         </Link>
 

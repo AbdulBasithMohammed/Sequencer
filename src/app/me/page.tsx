@@ -5,7 +5,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { SoftButton } from "@/components/ui/button";
 
 export const metadata = {
-  title: "Profile — Sequencer",
+  title: "Profile — Sequencr",
 };
 
 export default async function MePage() {
@@ -26,7 +26,7 @@ export default async function MePage() {
   return (
     <div className="mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-8 lg:px-12">
       <header className="mb-10 flex items-center justify-between">
-        <Link href="/" aria-label="Sequencer home">
+        <Link href="/" aria-label="Sequencr home">
           <Wordmark size={22} accent="pink" />
         </Link>
         <Link

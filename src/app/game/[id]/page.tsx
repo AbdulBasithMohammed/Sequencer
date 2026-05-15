@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/ui/wordmark";
 
 export const metadata = {
-  title: "Game — Sequencer",
+  title: "Game — Sequencr",
 };
 
 export default async function GamePage({
@@ -40,7 +40,7 @@ export default async function GamePage({
   return (
     <div className="mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-7 lg:px-10">
       <header className="mb-10 flex items-center justify-between">
-        <Link href="/" aria-label="Sequencer home">
+        <Link href="/" aria-label="Sequencr home">
           <Wordmark size={22} accent="pink" />
         </Link>
         <Link

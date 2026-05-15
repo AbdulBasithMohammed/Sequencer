@@ -9,7 +9,7 @@ import { AuthForm } from "./auth-form";
 import { QuoteCycler } from "@/components/ui/quote-cycler";
 
 export const metadata = {
-  title: "Sign in to Sequencer",
+  title: "Sign in to Sequencr",
 };
 
 const URL_MESSAGES: Record<string, string> = {
@@ -73,7 +73,7 @@ export default async function AuthPage({
         <Link
           href="/"
           className="absolute left-10 top-10 z-10"
-          aria-label="Sequencer home"
+          aria-label="Sequencr home"
         >
           <Wordmark size={26} accent="#FFFBF3" color="var(--color-ink)" />
         </Link>

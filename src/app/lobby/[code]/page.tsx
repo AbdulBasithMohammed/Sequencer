@@ -11,7 +11,7 @@ import {
 } from "./lobby-client";
 
 export const metadata = {
-  title: "Room — Sequencer",
+  title: "Room — Sequencr",
 };
 
 export default async function LobbyPage({
@@ -115,7 +115,7 @@ export default async function LobbyPage({
       className={`mx-auto flex w-full ${maxWidthClass} flex-1 flex-col px-6 py-7 lg:px-10`}
     >
       <header className="mb-10 flex items-center justify-between">
-        <Link href="/" aria-label="Sequencer home">
+        <Link href="/" aria-label="Sequencr home">
           <Wordmark size={22} accent="pink" />
         </Link>
         <Link

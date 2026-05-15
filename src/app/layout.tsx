@@ -15,7 +15,7 @@ const jakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Sequencer",
+  title: "Sequencr",
   description: "Five in a row, forever. The bubbly take on the classic board game.",
 };
 

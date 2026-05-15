@@ -27,7 +27,7 @@ export default async function Home() {
       <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col px-6 lg:px-12">
         {/* Top nav */}
         <header className="flex items-center justify-between py-6">
-          <Link href="/" aria-label="Sequencer home">
+          <Link href="/" aria-label="Sequencr home">
             <Wordmark size={26} accent="pink" />
           </Link>
           <nav className="flex items-center gap-2">

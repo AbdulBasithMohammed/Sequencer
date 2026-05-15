@@ -5,7 +5,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { ResetForm } from "./reset-form";
 
 export const metadata = {
-  title: "Set a new password — Sequencer",
+  title: "Set a new password — Sequencr",
 };
 
 export default async function ResetPage() {
@@ -21,7 +21,7 @@ export default async function ResetPage() {
   return (
     <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6 py-10">
       <header className="mb-12">
-        <Link href="/" aria-label="Sequencer home">
+        <Link href="/" aria-label="Sequencr home">
           <Wordmark size={24} accent="pink" />
         </Link>
       </header>
