@@ -160,14 +160,15 @@ export function LobbyRefresher({
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
 
-    // Layer 3 — periodic poll. Realtime delivery is best-effort, not
-    // guaranteed; events can be dropped under load or intermittent network.
-    // Every 15s while the page is visible, refetch as a safety net.
+    // Layer 3 — paranoia poll, 60s. With `worker: true` on the realtime
+    // client (see src/lib/supabase/client.ts) backgrounded-tab drops should
+    // be rare, and the focus listener catches the rest. This interval is
+    // a last-resort backstop for events that slip through.
     const pollInterval = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         flushAndRefresh(router);
       }
-    }, 15000);
+    }, 60000);
 
     return () => {
       supabase.removeChannel(channel);
