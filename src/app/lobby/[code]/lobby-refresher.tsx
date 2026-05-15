@@ -149,8 +149,31 @@ export function LobbyRefresher({
         }
       });
 
+    // Layer 2 — refresh whenever the tab becomes visible / focused.
+    // Tabs in the background often miss realtime events (browsers throttle
+    // WebSockets when not focused). Reconciling on focus catches those.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        flushAndRefresh(router);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    // Layer 3 — periodic poll. Realtime delivery is best-effort, not
+    // guaranteed; events can be dropped under load or intermittent network.
+    // Every 15s while the page is visible, refetch as a safety net.
+    const pollInterval = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        flushAndRefresh(router);
+      }
+    }, 15000);
+
     return () => {
       supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+      window.clearInterval(pollInterval);
     };
   }, [roomId, roomCode, userId, router]);
 
