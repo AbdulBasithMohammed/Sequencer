@@ -40,6 +40,8 @@ export default async function LobbyPage({
       .from("games")
       .select("id")
       .eq("room_id", room.id)
+      .order("started_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
     if (game) redirect(`/game/${game.id}`);
   }
