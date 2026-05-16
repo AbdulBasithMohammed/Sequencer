@@ -30,7 +30,7 @@ export default async function GamePage({
   const { data: game } = await supabase
     .from("games")
     .select(
-      "id, status, version, started_at, finished_at, board, turn_seat, turn_deadline, winner_team, room_id, rooms(code)",
+      "id, status, version, started_at, finished_at, board, turn_seat, turn_deadline, winner_team, room_id, deck_count, discard, rooms(code)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -47,6 +47,8 @@ export default async function GamePage({
     turn_deadline: string | null;
     winner_team: number | null;
     room_id: string;
+    deck_count: number;
+    discard: string[] | null;
     rooms: { code: string } | { code: string }[] | null;
   };
   const g = game as unknown as GameRow;
@@ -127,6 +129,8 @@ export default async function GamePage({
         players={players}
         hand={hand}
         roomCode={roomCode ?? null}
+        deckCount={g.deck_count}
+        discardCount={Array.isArray(g.discard) ? g.discard.length : 0}
       />
     </div>
   );

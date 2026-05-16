@@ -20,6 +20,8 @@ export function GameClient({
   players,
   hand,
   roomCode,
+  deckCount,
+  discardCount,
 }: {
   gameId: string;
   gameVersion: number;
@@ -31,6 +33,8 @@ export function GameClient({
   players: RosterPlayer[];
   hand: string[];
   roomCode: string | null;
+  deckCount: number;
+  discardCount: number;
 }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [burningIdx, setBurningIdx] = useState<number | null>(null);
@@ -141,6 +145,7 @@ export function GameClient({
             turnSeat={turnSeat}
             turnDeadline={turnDeadline}
           />
+          <DeckIndicator deckCount={deckCount} discardCount={discardCount} />
         </div>
       )}
       <div
@@ -239,6 +244,37 @@ export function GameClient({
         ) : null}
       </div>
     </>
+  );
+}
+
+function DeckIndicator({
+  deckCount,
+  discardCount,
+}: {
+  deckCount: number;
+  discardCount: number;
+}) {
+  const total = 104;
+  const used = total - deckCount - discardCount; // chips on the board + in hands
+  return (
+    <div className="mt-2 flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.15em] text-ink-soft">
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden>🂠</span>
+        <span className="text-ink">{deckCount}</span>
+        <span>deck</span>
+      </span>
+      <span aria-hidden>·</span>
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden>♺</span>
+        <span className="text-ink">{discardCount}</span>
+        <span>discard</span>
+      </span>
+      <span aria-hidden>·</span>
+      <span className="inline-flex items-center gap-1">
+        <span className="text-ink">{Math.max(0, used)}</span>
+        <span>in play</span>
+      </span>
+    </div>
   );
 }
 
