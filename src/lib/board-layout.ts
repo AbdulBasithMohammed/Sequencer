@@ -86,3 +86,31 @@ export function cardGlyph(card: string): string {
   const base = SUIT_BASE[card[1] as Suit];
   return String.fromCodePoint(base + offset);
 }
+
+export type CardKind = "normal" | "two_eyed_jack" | "one_eyed_jack";
+
+// Two-eyed jacks (♦J, ♣J) = wild place. One-eyed jacks (♠J, ♥J) = remove
+// opponent chip. Every other card is "normal" — must match the tile.
+export function classifyCard(card: string): CardKind {
+  if (card === "JD" || card === "JC") return "two_eyed_jack";
+  if (card === "JS" || card === "JH") return "one_eyed_jack";
+  return "normal";
+}
+
+// A "dead" card is a non-jack whose two board positions are both already
+// covered. The player may discard it as a free action ("dead-card swap")
+// and draw a replacement before playing.
+export function isDeadCard(
+  card: string,
+  boardCells: { team: number | null }[][],
+): boolean {
+  if (classifyCard(card) !== "normal") return false;
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 10; c++) {
+      if (BOARD_LAYOUT[r][c] === card && boardCells[r]?.[c]?.team == null) {
+        return false;
+      }
+    }
+  }
+  return true;
+}

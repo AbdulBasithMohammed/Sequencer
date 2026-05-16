@@ -19,13 +19,19 @@ const EMPTY_CELL: BoardCell = { team: null, sequence_ids: [] };
 // its content so cards stay upright after the parent rotation.
 const CELL_ASPECT = "5 / 7";
 
+export type SelectedKind = "normal" | "two_eyed_jack" | "one_eyed_jack";
+
 export function Board({
   state,
   selectedCard,
+  selectedKind,
+  myTeam,
   onCellClick,
 }: {
   state: BoardState;
   selectedCard?: string | null;
+  selectedKind?: SelectedKind | null;
+  myTeam?: number | null;
   onCellClick?: (row: number, col: number) => void;
 }) {
   return (
@@ -38,10 +44,23 @@ export function Board({
       {BOARD_LAYOUT.flatMap((row, r) =>
         row.map((card, c) => {
           const chip = state?.[r]?.[c] ?? EMPTY_CELL;
+          const empty = chip.team === null;
+          const protectedChip = chip.sequence_ids.length > 0;
+          // Highlight rules:
+          //   - two-eyed jack: every empty non-corner cell
+          //   - one-eyed jack: any opponent chip not in a completed sequence
+          //   - normal card: the two cells whose printed card matches
           const isMatch =
-            selectedCard != null &&
-            card === selectedCard &&
-            chip.team === null;
+            selectedKind === "two_eyed_jack"
+              ? card !== null && empty
+              : selectedKind === "one_eyed_jack"
+                ? card !== null &&
+                  !empty &&
+                  chip.team !== myTeam &&
+                  !protectedChip
+                : selectedCard != null &&
+                  card === selectedCard &&
+                  empty;
           return (
             <Cell
               key={`${r}-${c}`}
