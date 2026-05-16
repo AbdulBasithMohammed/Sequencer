@@ -28,6 +28,7 @@ export function GameClient({
   winnerTeam,
   board,
   turnSeat,
+  turnDeadline,
   players,
   hand,
 }: {
@@ -37,6 +38,7 @@ export function GameClient({
   winnerTeam: number | null;
   board: BoardState;
   turnSeat: number | null;
+  turnDeadline: string | null;
   players: RosterPlayer[];
   hand: string[];
 }) {
@@ -141,7 +143,11 @@ export function GameClient({
         </div>
       ) : (
         <div className="mb-3">
-          <TurnBanner players={players} turnSeat={turnSeat} />
+          <TurnBanner
+            players={players}
+            turnSeat={turnSeat}
+            turnDeadline={turnDeadline}
+          />
         </div>
       )}
       <div

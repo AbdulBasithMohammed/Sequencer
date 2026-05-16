@@ -1,11 +1,19 @@
-// Shows whose turn it is + a roster of all seated players with the active
-// seat highlighted. Active seat's team color is used as the highlight.
+"use client";
+
+import { useEffect, useState } from "react";
+
+// Shows whose turn it is + a countdown to the turn deadline + a roster of
+// all seated players with the active seat highlighted. The countdown is
+// purely visual — when it expires the server's pg_cron tick auto-discards
+// the AFK player's top card and advances the turn (Phase 6.A).
 
 const TEAM_COLOR: Record<number, string> = {
   1: "var(--color-pink)",
   2: "var(--color-blue)",
   3: "var(--color-mint)",
 };
+
+const LOW_THRESHOLD_MS = 10_000;
 
 export type RosterPlayer = {
   user_id: string;
@@ -18,9 +26,11 @@ export type RosterPlayer = {
 export function TurnBanner({
   players,
   turnSeat,
+  turnDeadline,
 }: {
   players: RosterPlayer[];
   turnSeat: number | null;
+  turnDeadline?: string | null;
 }) {
   const active = players.find((p) => p.seat_index === turnSeat) ?? null;
   const itsMyTurn = active?.is_me === true;
@@ -42,6 +52,9 @@ export function TurnBanner({
           It&apos;s {activeName} turn
           {itsMyTurn ? " — your move" : ""}
         </span>
+        {turnDeadline ? (
+          <Countdown deadline={turnDeadline} />
+        ) : null}
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-1.5">
@@ -74,5 +87,40 @@ export function TurnBanner({
         })}
       </div>
     </div>
+  );
+}
+
+function Countdown({ deadline }: { deadline: string }) {
+  const deadlineMs = new Date(deadline).getTime();
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const remaining = Math.max(0, deadlineMs - now);
+  const totalSeconds = Math.ceil(remaining / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const formatted = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  const low = remaining > 0 && remaining < LOW_THRESHOLD_MS;
+  const expired = remaining === 0;
+
+  return (
+    <span
+      className="font-mono text-[12px] tabular-nums"
+      style={{
+        color: expired
+          ? "var(--color-ink-soft)"
+          : low
+            ? "var(--color-pink)"
+            : "var(--color-ink-soft)",
+        fontWeight: low || expired ? 700 : 500,
+      }}
+      aria-label={`Time remaining: ${formatted}`}
+    >
+      {expired ? "advancing…" : formatted}
+    </span>
   );
 }

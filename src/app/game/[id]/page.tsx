@@ -123,6 +123,7 @@ export default async function GamePage({
         winnerTeam={g.winner_team}
         board={g.board}
         turnSeat={g.turn_seat}
+        turnDeadline={g.turn_deadline}
         players={players}
         hand={hand}
       />
