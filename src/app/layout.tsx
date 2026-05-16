@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
+import { InviteNotificationsMount } from "@/components/invite-notifications-mount";
 import "./globals.css";
 
 const bricolage = Bricolage_Grotesque({
@@ -36,6 +37,7 @@ export default function RootLayout({
       className={`${bricolage.variable} ${jakarta.variable} h-full`}
     >
       <body className="min-h-full flex flex-col bg-canvas text-ink">
+        <InviteNotificationsMount />
         {children}
       </body>
     </html>

@@ -9,6 +9,7 @@ import {
   type Room,
   type TokenColor,
 } from "./lobby-client";
+import { InviteFriendsPanel } from "./invite-friends-panel";
 
 export const metadata = {
   title: "Room — Sequencr",
@@ -134,6 +135,8 @@ export default async function LobbyPage({
         bans={bans}
         currentUserId={user.id}
       />
+
+      <InviteFriendsPanel roomId={roomData.id} />
     </div>
   );
 }
