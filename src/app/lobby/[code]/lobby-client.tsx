@@ -13,7 +13,6 @@ import {
 } from "@dnd-kit/core";
 import { SoftButton } from "@/components/ui/button";
 import { SoftPill } from "@/components/ui/pill";
-import { OnlineDot } from "@/components/presence";
 import { LobbyRefresher } from "./lobby-refresher";
 import { LeaveButton } from "./leave-button";
 import {
@@ -527,7 +526,6 @@ function DraggablePlayerCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1.5">
-            <OnlineDot userId={player.user_id} />
             <span
               className="truncate text-[14px] font-bold"
               title={name}
