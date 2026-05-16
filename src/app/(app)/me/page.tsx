@@ -11,7 +11,8 @@ export default async function MePage() {
   if (!user) return null;
   const profile = await getCurrentProfile();
 
-  const verifiedAt = user.email_confirmed_at;
+  const displayName = profile?.display_name ?? user.email ?? "";
+  const tag = profile?.tag ?? "";
 
   return (
     <div className="mx-auto flex w-full max-w-[760px] flex-col px-8 py-8">
@@ -22,20 +23,16 @@ export default async function MePage() {
           letterSpacing: "-0.03em",
         }}
       >
-        {profile?.display_name ?? user.email}
+        {displayName}
+        {tag ? (
+          <span className="ml-2 font-mono text-ink-soft" style={{ letterSpacing: "0" }}>
+            #{tag}
+          </span>
+        ) : null}
       </h1>
 
       <dl className="mt-8 overflow-hidden rounded-3xl border border-line bg-surface">
-        <Row label="Display name" value={profile?.display_name ?? "—"} />
         <Row label="Email" value={user.email ?? "—"} mono />
-        <Row
-          label="Verified"
-          value={
-            verifiedAt
-              ? new Date(verifiedAt).toLocaleString()
-              : "Not yet verified"
-          }
-        />
         <Row
           label="Account created"
           value={
