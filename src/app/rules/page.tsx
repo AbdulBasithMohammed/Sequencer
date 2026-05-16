@@ -159,7 +159,7 @@ export default async function RulesPage() {
     </div>
   );
 
-  return isAuthed ? <AppShell active="rules">{content}</AppShell> : content;
+  return isAuthed ? <AppShell>{content}</AppShell> : content;
 }
 
 function Section({
