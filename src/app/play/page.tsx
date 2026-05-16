@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { signOutAction } from "@/lib/auth/actions";
-import { Wordmark } from "@/components/ui/wordmark";
+import { AppShell } from "@/components/app-shell";
 import { CreateRoomCard, JoinRoomCard } from "./play-forms";
 import { KickBanToast } from "./kick-ban-toast";
 import { NoticeToast } from "./notice-toast";
@@ -9,6 +7,22 @@ import { NoticeToast } from "./notice-toast";
 export const metadata = {
   title: "Lobby — Sequencr",
 };
+
+type Stats = {
+  games_played: number;
+  games_won: number;
+  moves_played: number;
+  total_seconds: number;
+};
+
+function formatPlayTime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const remMin = minutes % 60;
+  return remMin === 0 ? `${hours}h` : `${hours}h ${remMin}m`;
+}
 
 export default async function PlayPage({
   searchParams,
@@ -28,56 +42,23 @@ export default async function PlayPage({
     .eq("id", user.id)
     .maybeSingle();
 
-  const handle = profile?.display_name ?? user.email?.split("@")[0] ?? "you";
+  const { data: statsData } = await supabase.rpc("get_my_stats");
+  const stats: Stats = (statsData as Stats) ?? {
+    games_played: 0,
+    games_won: 0,
+    moves_played: 0,
+    total_seconds: 0,
+  };
+
   const greetingName = profile?.display_name ?? "there";
-  const initial = (profile?.display_name ?? user.email ?? "?")[0]?.toUpperCase();
+  const winRate =
+    stats.games_played > 0
+      ? Math.round((stats.games_won / stats.games_played) * 100)
+      : null;
 
   return (
-    <div className="grid flex-1 grid-cols-1 md:grid-cols-[300px_1fr]">
-      {/* Sidebar */}
-      <aside className="flex flex-col gap-2 border-r border-line p-7">
-        <Link href="/" className="mb-6" aria-label="Sequencr home">
-          <Wordmark size={22} accent="pink" />
-        </Link>
-
-        <SidebarLink href="/" label="Home" />
-        <SidebarLink href="/play" label="Play" active />
-        <SidebarLink href="/me" label="Profile" />
-
-        <div className="mt-auto rounded-2xl border border-line bg-surface p-3.5">
-          <Link
-            href="/me"
-            className="flex items-center gap-2.5 hover:opacity-80"
-          >
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display font-bold text-canvas"
-              style={{ background: "var(--color-blue)" }}
-            >
-              {initial}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div
-                className="truncate text-[13px] font-bold"
-                title={`@${handle}`}
-              >
-                @{handle}
-              </div>
-              <div className="text-[11px] text-ink-soft">Signed in</div>
-            </div>
-          </Link>
-          <form action={signOutAction} className="mt-2">
-            <button
-              type="submit"
-              className="text-[11px] font-semibold text-ink-soft hover:text-ink"
-            >
-              Sign out
-            </button>
-          </form>
-        </div>
-      </aside>
-
-      {/* Main */}
-      <main className="overflow-hidden px-8 py-7">
+    <AppShell active="play">
+      <div className="px-8 py-7">
         {(banned || kicked) && (
           <KickBanToast banned={banned} kicked={kicked} />
         )}
@@ -89,40 +70,90 @@ export default async function PlayPage({
           </div>
           <h1
             className="mt-1 font-display font-bold leading-none"
-            style={{ fontSize: "clamp(32px, 4vw, 44px)", letterSpacing: "-0.03em" }}
+            style={{
+              fontSize: "clamp(32px, 4vw, 44px)",
+              letterSpacing: "-0.03em",
+            }}
           >
             Pick a table.{" "}
             <span className="italic text-pink">Or start your own.</span>
           </h1>
         </div>
 
+        <section className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            label="Wins"
+            value={stats.games_won.toLocaleString()}
+            sub={
+              stats.games_played > 0
+                ? `of ${stats.games_played} games`
+                : "no games yet"
+            }
+            accent="pink"
+          />
+          <StatCard
+            label="Win rate"
+            value={winRate == null ? "—" : `${winRate}%`}
+            sub={winRate == null ? "play a game" : "all-time"}
+            accent="mint"
+          />
+          <StatCard
+            label="Moves played"
+            value={stats.moves_played.toLocaleString()}
+            sub="chips, jacks, swaps"
+            accent="blue"
+          />
+          <StatCard
+            label="Time at the table"
+            value={formatPlayTime(stats.total_seconds)}
+            sub="across every game"
+            accent="butter"
+          />
+        </section>
+
         <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
           <CreateRoomCard />
           <JoinRoomCard />
         </div>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }
 
-function SidebarLink({
-  href,
+function StatCard({
   label,
-  active,
+  value,
+  sub,
+  accent,
 }: {
-  href: string;
   label: string;
-  active?: boolean;
+  value: string;
+  sub: string;
+  accent: "pink" | "blue" | "mint" | "butter";
 }) {
+  const color =
+    accent === "pink"
+      ? "var(--color-pink)"
+      : accent === "blue"
+        ? "var(--color-blue)"
+        : accent === "mint"
+          ? "var(--color-mint)"
+          : "var(--color-butter)";
   return (
-    <Link
-      href={href}
-      className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-[14px] font-semibold ${
-        active ? "bg-ink text-canvas" : "text-ink hover:bg-surface"
-      }`}
+    <div
+      className="rounded-2xl border border-line bg-surface px-4 py-4"
+      style={{ borderTopWidth: 3, borderTopColor: color }}
     >
-      {label}
-      {active && <span aria-hidden>·</span>}
-    </Link>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">
+        {label}
+      </div>
+      <div
+        className="mt-1 font-display font-bold leading-none text-ink"
+        style={{ fontSize: 28, letterSpacing: "-0.02em" }}
+      >
+        {value}
+      </div>
+      <div className="mt-1 text-[11px] text-ink-soft">{sub}</div>
+    </div>
   );
 }

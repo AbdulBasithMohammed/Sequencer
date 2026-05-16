@@ -1,25 +1,41 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/ui/wordmark";
 import { SoftLinkButton } from "@/components/ui/button";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata = {
   title: "How to play — Sequencr",
 };
 
-export default function RulesPage() {
-  return (
-    <div className="mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-8 lg:px-12">
-      <header className="mb-10 flex items-center justify-between">
-        <Link href="/" aria-label="Sequencr home">
-          <Wordmark size={22} accent="pink" />
-        </Link>
-        <Link
-          href="/"
-          className="text-[13px] font-semibold text-ink-soft hover:text-ink"
-        >
-          ← Home
-        </Link>
-      </header>
+export default async function RulesPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const isAuthed = !!user;
+
+  const content = (
+    <div
+      className={
+        isAuthed
+          ? "mx-auto flex w-full max-w-[820px] flex-col px-8 py-8"
+          : "mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-8 lg:px-12"
+      }
+    >
+      {!isAuthed && (
+        <header className="mb-10 flex items-center justify-between">
+          <Link href="/" aria-label="Sequencr home">
+            <Wordmark size={22} accent="pink" />
+          </Link>
+          <Link
+            href="/"
+            className="text-[13px] font-semibold text-ink-soft hover:text-ink"
+          >
+            ← Home
+          </Link>
+        </header>
+      )}
 
       <h1
         className="font-display font-bold leading-[0.95]"
@@ -129,16 +145,24 @@ export default function RulesPage() {
         removed by a one-eyed jack. The line is locked in.
       </Section>
 
-      <div className="mt-12 mb-8 flex flex-wrap gap-3">
-        <SoftLinkButton href="/auth?mode=signup" variant="primary" size="sm">
-          Create your account
-        </SoftLinkButton>
-        <SoftLinkButton href="/auth?mode=signin" variant="outline" size="sm">
-          I already play
-        </SoftLinkButton>
-      </div>
+      {!isAuthed && (
+        <div className="mt-12 mb-8 flex flex-wrap gap-3">
+          <SoftLinkButton
+            href="/auth?mode=signup"
+            variant="primary"
+            size="sm"
+          >
+            Create your account
+          </SoftLinkButton>
+          <SoftLinkButton href="/auth?mode=signin" variant="outline" size="sm">
+            I already play
+          </SoftLinkButton>
+        </div>
+      )}
     </div>
   );
+
+  return isAuthed ? <AppShell active="rules">{content}</AppShell> : content;
 }
 
 function Section({

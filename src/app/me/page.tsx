@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/lib/auth/actions";
-import { Wordmark } from "@/components/ui/wordmark";
 import { SoftButton } from "@/components/ui/button";
+import { AppShell } from "@/components/app-shell";
 
 export const metadata = {
   title: "Profile — Sequencr",
@@ -24,53 +23,46 @@ export default async function MePage() {
   const verifiedAt = user.email_confirmed_at;
 
   return (
-    <div className="mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-8 lg:px-12">
-      <header className="mb-10 flex items-center justify-between">
-        <Link href="/" aria-label="Sequencr home">
-          <Wordmark size={22} accent="pink" />
-        </Link>
-        <Link
-          href="/play"
-          className="text-[13px] font-semibold text-ink-soft hover:text-ink"
+    <AppShell active="profile">
+      <div className="mx-auto flex w-full max-w-[760px] flex-col px-8 py-8">
+        <h1
+          className="font-display font-bold leading-none"
+          style={{
+            fontSize: "clamp(40px, 5vw, 56px)",
+            letterSpacing: "-0.03em",
+          }}
         >
-          ← Back to lobby
-        </Link>
-      </header>
+          {profile?.display_name ?? user.email}
+        </h1>
 
-      <h1
-        className="font-display font-bold leading-none"
-        style={{ fontSize: "clamp(40px, 5vw, 56px)", letterSpacing: "-0.03em" }}
-      >
-        {profile?.display_name ?? user.email}
-      </h1>
+        <dl className="mt-8 overflow-hidden rounded-3xl border border-line bg-surface">
+          <Row label="Display name" value={profile?.display_name ?? "—"} />
+          <Row label="Email" value={user.email ?? "—"} mono />
+          <Row
+            label="Verified"
+            value={
+              verifiedAt
+                ? new Date(verifiedAt).toLocaleString()
+                : "Not yet verified"
+            }
+          />
+          <Row
+            label="Account created"
+            value={
+              profile?.created_at
+                ? new Date(profile.created_at).toLocaleString()
+                : "—"
+            }
+          />
+        </dl>
 
-      <dl className="mt-8 overflow-hidden rounded-3xl border border-line bg-surface">
-        <Row label="Display name" value={profile?.display_name ?? "—"} />
-        <Row label="Email" value={user.email ?? "—"} mono />
-        <Row
-          label="Verified"
-          value={
-            verifiedAt
-              ? new Date(verifiedAt).toLocaleString()
-              : "Not yet verified"
-          }
-        />
-        <Row
-          label="Account created"
-          value={
-            profile?.created_at
-              ? new Date(profile.created_at).toLocaleString()
-              : "—"
-          }
-        />
-      </dl>
-
-      <form action={signOutAction} className="mt-8">
-        <SoftButton variant="outline" type="submit">
-          Sign out
-        </SoftButton>
-      </form>
-    </div>
+        <form action={signOutAction} className="mt-8">
+          <SoftButton variant="outline" type="submit">
+            Sign out
+          </SoftButton>
+        </form>
+      </div>
+    </AppShell>
   );
 }
 
