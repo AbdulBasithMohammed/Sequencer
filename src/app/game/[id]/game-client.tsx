@@ -187,52 +187,57 @@ export function GameClient({
           burningIdx={burningIdx}
         />
       </div>
-      {error ? (
-        <div className="mt-3 text-center text-[12px] font-semibold text-pink">
-          {error}
-        </div>
-      ) : null}
-      {myTurn && selectedCard && selectedIsDead && selectedIdx != null ? (
-        <div className="mt-3 flex flex-col items-center gap-2 text-[11px] text-ink-soft">
-          <span>
-            <span className="font-mono font-bold text-ink">{selectedCard}</span>{" "}
-            is dead — no open tile remains.
-          </span>
-          <button
-            type="button"
-            onClick={() => handleSwapDead(selectedCard, selectedIdx)}
-            disabled={!interactable}
-            className="rounded-full border border-line bg-canvas px-3 py-1 text-[12px] font-semibold text-ink shadow-sm transition-colors hover:bg-surface disabled:opacity-50"
-          >
-            Swap dead card
-          </button>
-        </div>
-      ) : myTurn && selectedCard ? (
-        <div className="mt-3 text-center text-[11px] text-ink-soft">
-          {selectedKind === "two_eyed_jack" ? (
-            <>
+      {/* Fixed-height hint slot: reserves vertical space so toggling
+          selection doesn't shift the hand + board above it. */}
+      <div className="mt-3 flex h-[64px] items-start justify-center">
+        {error ? (
+          <div className="text-center text-[12px] font-semibold text-pink">
+            {error}
+          </div>
+        ) : myTurn && selectedCard && selectedIsDead && selectedIdx != null ? (
+          <div className="flex flex-col items-center gap-2 text-[11px] text-ink-soft">
+            <span>
               <span className="font-mono font-bold text-ink">
                 {selectedCard}
               </span>{" "}
-              is wild — tap any glowing tile.
-            </>
-          ) : selectedKind === "one_eyed_jack" ? (
-            <>
-              <span className="font-mono font-bold text-ink">
-                {selectedCard}
-              </span>{" "}
-              removes an opponent chip — tap a glowing one.
-            </>
-          ) : (
-            <>
-              Tap a glowing tile to place your{" "}
-              <span className="font-mono font-bold text-ink">
-                {selectedCard}
-              </span>
-            </>
-          )}
-        </div>
-      ) : null}
+              is dead — no open tile remains.
+            </span>
+            <button
+              type="button"
+              onClick={() => handleSwapDead(selectedCard, selectedIdx)}
+              disabled={!interactable}
+              className="rounded-full border border-line bg-canvas px-3 py-1 text-[12px] font-semibold text-ink shadow-sm transition-colors hover:bg-surface disabled:opacity-50"
+            >
+              Swap dead card
+            </button>
+          </div>
+        ) : myTurn && selectedCard ? (
+          <div className="text-center text-[11px] text-ink-soft">
+            {selectedKind === "two_eyed_jack" ? (
+              <>
+                <span className="font-mono font-bold text-ink">
+                  {selectedCard}
+                </span>{" "}
+                is wild — tap any glowing tile.
+              </>
+            ) : selectedKind === "one_eyed_jack" ? (
+              <>
+                <span className="font-mono font-bold text-ink">
+                  {selectedCard}
+                </span>{" "}
+                removes an opponent chip — tap a glowing one.
+              </>
+            ) : (
+              <>
+                Tap a glowing tile to place your{" "}
+                <span className="font-mono font-bold text-ink">
+                  {selectedCard}
+                </span>
+              </>
+            )}
+          </div>
+        ) : null}
+      </div>
     </>
   );
 }
