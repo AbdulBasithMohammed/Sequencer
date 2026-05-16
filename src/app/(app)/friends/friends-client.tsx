@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import {
   acceptFriendRequest,
   cancelFriendRequest,
@@ -22,10 +24,33 @@ export type FriendsData = {
   ignored: FriendUser[];
 };
 
-export function FriendsClient({ data }: { data: FriendsData }) {
+export function FriendsClient({
+  data,
+  userId,
+}: {
+  data: FriendsData;
+  userId: string;
+}) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const router = useRouter();
+
+  // Subscribe to friends:<userId> broadcast. Server triggers fire on any
+  // change to friend_requests / friendships / friend_ignores touching the
+  // caller and we just refetch the page data — same model as lobby/game.
+  useEffect(() => {
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`friends:${userId}`, { config: { private: false } })
+      .on("broadcast", { event: "update" }, () => {
+        router.refresh();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, router]);
 
   // Debounced search.
   useEffect(() => {
@@ -80,7 +105,21 @@ export function FriendsClient({ data }: { data: FriendsData }) {
             ) : results.length === 0 ? (
               <EmptyRow text="No one matches that." />
             ) : (
-              results.map((r) => <SearchRow key={r.user_id} row={r} />)
+              results.map((r) => (
+                <SearchRow
+                  key={r.user_id}
+                  row={r}
+                  onAdded={(uid) =>
+                    setResults((curr) =>
+                      curr.map((x) =>
+                        x.user_id === uid
+                          ? { ...x, relationship: "request_sent" }
+                          : x,
+                      ),
+                    )
+                  }
+                />
+              ))
             )}
           </div>
         )}
@@ -189,7 +228,13 @@ function UserRow({
 
 // ─── Search-result row ─────────────────────────────────────────────────────
 
-function SearchRow({ row }: { row: SearchResult }) {
+function SearchRow({
+  row,
+  onAdded,
+}: {
+  row: SearchResult;
+  onAdded: (userId: string) => void;
+}) {
   const actions =
     row.relationship === "friend" ? (
       <Pill>Friend</Pill>
@@ -200,7 +245,7 @@ function SearchRow({ row }: { row: SearchResult }) {
     ) : row.relationship === "ignored" ? (
       <Pill>Ignored</Pill>
     ) : (
-      <AddButton userId={row.user_id} />
+      <AddButton userId={row.user_id} onSuccess={() => onAdded(row.user_id)} />
     );
 
   return (
@@ -226,10 +271,12 @@ function ActionButton({
   label,
   onClick,
   variant = "outline",
+  onSuccess,
 }: {
   label: string;
   onClick: () => Promise<{ error: string | null }>;
   variant?: "primary" | "outline";
+  onSuccess?: () => void;
 }) {
   const [pending, startTransition] = useTransition();
   const classes =
@@ -242,7 +289,8 @@ function ActionButton({
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
-          await onClick();
+          const r = await onClick();
+          if (!r.error) onSuccess?.();
         })
       }
       className={`rounded-full px-3 py-1.5 text-[12px] font-semibold transition-opacity disabled:opacity-50 ${classes}`}
@@ -252,12 +300,19 @@ function ActionButton({
   );
 }
 
-function AddButton({ userId }: { userId: string }) {
+function AddButton({
+  userId,
+  onSuccess,
+}: {
+  userId: string;
+  onSuccess?: () => void;
+}) {
   return (
     <ActionButton
       label="Add"
       variant="primary"
       onClick={() => sendFriendRequest(userId)}
+      onSuccess={onSuccess}
     />
   );
 }

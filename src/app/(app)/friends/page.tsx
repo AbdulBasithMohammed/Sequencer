@@ -20,5 +20,5 @@ export default async function FriendsPage() {
     ignored: [],
   };
 
-  return <FriendsClient data={friendsData} />;
+  return <FriendsClient data={friendsData} userId={user.id} />;
 }
