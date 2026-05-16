@@ -57,6 +57,16 @@ export function GameClient({
   const interactable =
     myTurn && !submitting && burningIdx == null && !gameFinished;
 
+  // Every normal-card in the hand whose two board positions are both
+  // taken. Surfaced as a dedicated swap panel so a stuck player can
+  // always find the discard action on their turn.
+  const deadCardsInHand = hand
+    .map((card, idx) => ({ card, idx }))
+    .filter(
+      ({ card }) =>
+        classifyCard(card) === "normal" && isDeadCard(card, board),
+    );
+
   async function handleCellClick(row: number, col: number) {
     if (!interactable || selectedCard == null || selectedIdx == null) return;
     if (selectedIsDead) {
@@ -92,28 +102,27 @@ export function GameClient({
     router.refresh();
   }
 
-  async function handleSwapDead() {
-    if (!interactable || selectedCard == null || selectedIdx == null) return;
-    if (!selectedIsDead) {
+  async function handleSwapDead(card: string, idx: number) {
+    if (!interactable) return;
+    if (classifyCard(card) !== "normal" || !isDeadCard(card, board)) {
       setError("Only dead cards can be swapped.");
       return;
     }
     setError(null);
     setSubmitting(true);
-    const idxBeingSwapped = selectedIdx;
     const supabase = createClient();
     const { error: rpcError } = await supabase.rpc("swap_dead_card", {
       p_game_id: gameId,
       p_client_version: gameVersion,
-      p_card: selectedCard,
+      p_card: card,
     });
     if (rpcError) {
       setSubmitting(false);
       setError(rpcError.message);
       return;
     }
-    setBurningIdx(idxBeingSwapped);
-    setSelectedIdx(null);
+    setBurningIdx(idx);
+    if (selectedIdx === idx) setSelectedIdx(null);
     await new Promise((r) => window.setTimeout(r, 540));
     setSubmitting(false);
     router.refresh();
@@ -193,24 +202,37 @@ export function GameClient({
           {error}
         </div>
       ) : null}
-      {myTurn && selectedCard && selectedIsDead ? (
-        <div className="mt-3 flex flex-col items-center gap-2 text-[11px] text-ink-soft">
-          <span>
-            <span className="font-mono font-bold text-ink">{selectedCard}</span>{" "}
-            is dead — both board positions are claimed.
+      {myTurn && deadCardsInHand.length > 0 ? (
+        <div className="mt-3 flex flex-col items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-ink-soft">
+            Dead cards · discard for a fresh draw
           </span>
-          <button
-            type="button"
-            onClick={handleSwapDead}
-            disabled={submitting}
-            className="rounded-full border border-line/70 bg-canvas px-3 py-1 text-[12px] font-semibold text-ink shadow-sm transition-colors hover:bg-surface disabled:opacity-50"
-          >
-            Swap dead card
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {deadCardsInHand.map(({ card, idx }) => (
+              <button
+                key={`${card}-${idx}`}
+                type="button"
+                onClick={() => handleSwapDead(card, idx)}
+                disabled={!interactable}
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-canvas px-3 py-1 text-[12px] font-semibold text-ink shadow-sm transition-colors hover:bg-surface disabled:opacity-50"
+              >
+                <span className="font-mono font-bold">{card}</span>
+                <span className="text-ink-soft">Swap</span>
+              </button>
+            ))}
+          </div>
         </div>
-      ) : myTurn && selectedCard ? (
+      ) : null}
+      {myTurn && selectedCard ? (
         <div className="mt-3 text-center text-[11px] text-ink-soft">
-          {selectedKind === "two_eyed_jack" ? (
+          {selectedIsDead ? (
+            <>
+              <span className="font-mono font-bold text-ink">
+                {selectedCard}
+              </span>{" "}
+              is dead — tap its Swap button below.
+            </>
+          ) : selectedKind === "two_eyed_jack" ? (
             <>
               <span className="font-mono font-bold text-ink">
                 {selectedCard}
