@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
 import { InviteNotificationsMount } from "@/components/invite-notifications-mount";
+import { PresenceProvider } from "@/components/presence";
+import { getCurrentUser } from "@/lib/auth/me";
 import "./globals.css";
 
 const bricolage = Bricolage_Grotesque({
@@ -26,19 +28,23 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getCurrentUser();
+
   return (
     <html
       lang="en"
       className={`${bricolage.variable} ${jakarta.variable} h-full`}
     >
       <body className="min-h-full flex flex-col bg-canvas text-ink">
-        <InviteNotificationsMount />
-        {children}
+        <PresenceProvider userId={user?.id ?? null}>
+          <InviteNotificationsMount />
+          {children}
+        </PresenceProvider>
       </body>
     </html>
   );

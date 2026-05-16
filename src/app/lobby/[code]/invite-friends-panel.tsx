@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { OnlineDot } from "@/components/presence";
 import {
   fetchInvitableFriends,
   inviteToRoom,
@@ -107,7 +108,8 @@ function FriendRow({
         isLast ? "" : "border-b border-line"
       }`}
     >
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <OnlineDot userId={friend.user_id} />
         <div className="truncate text-[14px] font-semibold text-ink">
           {friend.display_name}{" "}
           <span className="font-mono font-normal text-ink-soft">

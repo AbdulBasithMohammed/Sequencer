@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { OnlineDot } from "@/components/presence";
 import {
   acceptFriendRequest,
   cancelFriendRequest,
@@ -187,6 +188,7 @@ function SectionList<T extends FriendUser>({
           items.map((u) => (
             <UserRow
               key={u.user_id}
+              userId={u.user_id}
               display_name={u.display_name}
               tag={u.tag}
               actions={renderActions(u)}
@@ -205,17 +207,20 @@ function EmptyRow({ text }: { text: string }) {
 }
 
 function UserRow({
+  userId,
   display_name,
   tag,
   actions,
 }: {
+  userId: string;
   display_name: string;
   tag: string;
   actions: React.ReactNode;
 }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 last:border-b-0">
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 items-center gap-2.5">
+        <OnlineDot userId={userId} />
         <div className="truncate text-[14px] font-semibold text-ink">
           {display_name}{" "}
           <span className="font-mono font-normal text-ink-soft">#{tag}</span>
@@ -250,6 +255,7 @@ function SearchRow({
 
   return (
     <UserRow
+      userId={row.user_id}
       display_name={row.display_name}
       tag={row.tag}
       actions={actions}
