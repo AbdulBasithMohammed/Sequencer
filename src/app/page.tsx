@@ -7,9 +7,9 @@ import { SoftPill } from "@/components/ui/pill";
 
 const FEATURES = [
   ["Cozy rooms", "Invite friends with a 6-character code."],
-  ["Quick matches", "Find a game in under 12 seconds."],
+  ["Your own color", "Pick a chip color and keep it all game."],
   ["Up to 12 players", "Solo, head-to-head, or two big teams."],
-  ["Cross-device", "Pick up where you left off, anywhere."],
+  ["Cross-device", "Phone or laptop — refresh anytime, your seat stays."],
 ] as const;
 
 export default async function Home() {
@@ -31,8 +31,7 @@ export default async function Home() {
             <Wordmark size={26} accent="pink" />
           </Link>
           <nav className="flex items-center gap-2">
-            <NavLink href="#how">How it works</NavLink>
-            <NavLink href="#community">Community</NavLink>
+            <NavLink href="/rules">How it works</NavLink>
             <SoftLinkButton
               href="/auth?mode=signin"
               size="sm"
@@ -78,7 +77,7 @@ export default async function Home() {
             </h1>
 
             <p className="mt-5 max-w-[460px] text-[18px] leading-[1.5] text-ink-soft">
-              A bubbly take on the board game you grew up with. Place tokens,
+              A modern take on the board game you grew up with. Place tokens,
               claim lines, outwit friends — across cozy rooms with people you
               actually like.
             </p>
@@ -97,7 +96,7 @@ export default async function Home() {
             </div>
 
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-1 text-[13px] font-medium text-ink-soft">
-              <span>★ ★ ★ ★ ★ &nbsp;Friendly competitive</span>
+              <span>Friendly competitive</span>
               <span>· Free to play</span>
               <span>· No ads, ever</span>
             </div>
