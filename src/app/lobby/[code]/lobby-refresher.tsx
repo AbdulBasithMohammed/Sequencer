@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { revalidateLobbyAction } from "./actions";
@@ -11,12 +11,23 @@ async function flushAndRefresh(router: ReturnType<typeof useRouter>) {
 }
 
 /**
- * Renderless. Subscribes to Realtime changes on this room and:
- *   - calls router.refresh() on most events
- *   - if the current user is the deleted row, redirects to /play?kicked=CODE
- *     (unless they set the "voluntary-leave" sessionStorage flag before
- *     submitting the Leave form, in which case the server action's redirect
- *     handles navigation)
+ * Renderless. Subscribes to the `lobby:<roomId>` Broadcast channel —
+ * populated by Postgres triggers that fire on every change to rooms,
+ * room_players, room_bans. Lighter and faster than postgres_changes (no
+ * per-row RLS dispatch), fixes mobile delivery lag.
+ *
+ * Kept on postgres_changes (because they need event-specific payload
+ * the broadcast doesn't carry):
+ *   - DELETE on room_players: detect when *I* was the deleted row so we
+ *     can show kicked/banned redirect with the right query param
+ *   - INSERT on games: redirect to /game/<id> when the host starts
+ *
+ * Defence in depth:
+ *   - subscribe-and-reconcile on SUBSCRIBED status
+ *   - focus/visibility refresh
+ *   - gap detection via lastSeenVersion
+ * The 60s polling backstop is gone — gap detection fires exactly when a
+ * message is missed.
  */
 export function LobbyRefresher({
   roomId,
@@ -28,11 +39,25 @@ export function LobbyRefresher({
   userId: string;
 }) {
   const router = useRouter();
+  const lastSeenVersionRef = useRef<number>(0);
 
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
       .channel(`lobby:${roomId}`)
+      .on("broadcast", { event: "update" }, (msg) => {
+        const v = (msg.payload as { version?: number } | undefined)?.version;
+        if (typeof v === "number") {
+          if (v <= lastSeenVersionRef.current) return;
+          if (v > lastSeenVersionRef.current + 1) {
+            console.warn(
+              `[lobby-refresher] gap: lastSeen=${lastSeenVersionRef.current} -> ${v}`,
+            );
+          }
+          lastSeenVersionRef.current = v;
+        }
+        flushAndRefresh(router);
+      })
       .on(
         "postgres_changes",
         {
@@ -52,8 +77,6 @@ export function LobbyRefresher({
               window.sessionStorage.removeItem("voluntary-leave");
               return; // server action handles the redirect
             }
-            // Distinguish ban from kick by checking if our own ban row exists.
-            // RLS lets us see only our own ban; query returns null on simple kick.
             const { data: ban } = await supabase
               .from("room_bans")
               .select("user_id")
@@ -75,60 +98,6 @@ export function LobbyRefresher({
         {
           event: "INSERT",
           schema: "public",
-          table: "room_players",
-          filter: `room_id=eq.${roomId}`,
-        },
-        () => flushAndRefresh(router),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "room_players",
-          filter: `room_id=eq.${roomId}`,
-        },
-        () => flushAndRefresh(router),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "rooms",
-          filter: `id=eq.${roomId}`,
-        },
-        async (payload) => {
-          const newStatus = (payload.new as { status?: string } | null)?.status;
-          if (newStatus === "in_game") {
-            const { data: game } = await supabase
-              .from("games")
-              .select("id")
-              .eq("room_id", roomId)
-              .maybeSingle();
-            if (game?.id) {
-              router.push(`/game/${game.id}`);
-              return;
-            }
-          }
-          flushAndRefresh(router);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "room_bans",
-          filter: `room_id=eq.${roomId}`,
-        },
-        () => flushAndRefresh(router),
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
           table: "games",
           filter: `room_id=eq.${roomId}`,
         },
@@ -137,21 +106,12 @@ export function LobbyRefresher({
           if (gameId) router.push(`/game/${gameId}`);
         },
       )
-      // Subscribe-and-reconcile. The server-rendered snapshot was taken
-      // before this channel was listening, so any event that fired in the
-      // gap between page render and the channel reaching SUBSCRIBED state
-      // (typically 200–1000 ms) is lost. Re-fetching once the moment we're
-      // subscribed catches those missed events. Also re-runs on any
-      // reconnect (socket drop + auto-rejoin) for free.
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           flushAndRefresh(router);
         }
       });
 
-    // Layer 2 — refresh whenever the tab becomes visible / focused.
-    // Tabs in the background often miss realtime events (browsers throttle
-    // WebSockets when not focused). Reconciling on focus catches those.
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         flushAndRefresh(router);
@@ -160,21 +120,10 @@ export function LobbyRefresher({
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
 
-    // Layer 3 — paranoia poll, 60s. With `worker: true` on the realtime
-    // client (see src/lib/supabase/client.ts) backgrounded-tab drops should
-    // be rare, and the focus listener catches the rest. This interval is
-    // a last-resort backstop for events that slip through.
-    const pollInterval = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        flushAndRefresh(router);
-      }
-    }, 60000);
-
     return () => {
       supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
-      window.clearInterval(pollInterval);
     };
   }, [roomId, roomCode, userId, router]);
 

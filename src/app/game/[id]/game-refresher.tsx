@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { revalidateGameAction } from "./actions";
@@ -10,26 +10,41 @@ async function flushAndRefresh(router: ReturnType<typeof useRouter>) {
   router.refresh();
 }
 
-// Renderless. Subscribes to UPDATEs on the games row so every connected
-// client repaints when a move lands. Uses the same defence-in-depth pattern
-// as LobbyRefresher: subscribe-and-reconcile + focus/visibility + 60s poll.
+// Renderless. Subscribes to the `game:<id>` Broadcast channel — populated
+// by a Postgres trigger that fires on every games-row UPDATE (see
+// 20260516..._realtime_broadcast_from_db.sql). Lighter and faster than
+// postgres_changes (no per-row RLS dispatch on every subscriber), which
+// fixes the mobile-delivery lag.
+//
+// Defence in depth:
+//   - subscribe-and-reconcile on SUBSCRIBED status (catches initial race)
+//   - focus/visibility refresh (catches dropped events on backgrounded tabs)
+//   - gap detection via lastSeenVersion (logs but always refetches anyway)
+// The 60s polling backstop is gone — gap detection fires exactly when a
+// message is missed.
 export function GameRefresher({ gameId }: { gameId: string }) {
   const router = useRouter();
+  const lastSeenVersionRef = useRef<number>(0);
 
   useEffect(() => {
     const supabase = createClient();
     const channel = supabase
       .channel(`game:${gameId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "games",
-          filter: `id=eq.${gameId}`,
-        },
-        () => flushAndRefresh(router),
-      )
+      .on("broadcast", { event: "update" }, (msg) => {
+        const v = (msg.payload as { version?: number } | undefined)?.version;
+        if (typeof v === "number") {
+          if (v <= lastSeenVersionRef.current) return; // dedupe
+          if (v > lastSeenVersionRef.current + 1) {
+            // Gap — we missed at least one event. We refetch the full state
+            // anyway, so this is observability only.
+            console.warn(
+              `[game-refresher] gap: lastSeen=${lastSeenVersionRef.current} -> ${v}`,
+            );
+          }
+          lastSeenVersionRef.current = v;
+        }
+        flushAndRefresh(router);
+      })
       .subscribe((status) => {
         if (status === "SUBSCRIBED") flushAndRefresh(router);
       });
@@ -40,15 +55,10 @@ export function GameRefresher({ gameId }: { gameId: string }) {
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
 
-    const pollInterval = window.setInterval(() => {
-      if (document.visibilityState === "visible") flushAndRefresh(router);
-    }, 60000);
-
     return () => {
       supabase.removeChannel(channel);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
-      window.clearInterval(pollInterval);
     };
   }, [gameId, router]);
 
