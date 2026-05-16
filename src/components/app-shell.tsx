@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/lib/auth/actions";
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 
 type NavKey = "play" | "rules" | "friends" | "profile";
@@ -19,17 +19,9 @@ export async function AppShell({
   active: NavKey;
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return <>{children}</>;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("id", user.id)
-    .maybeSingle();
+  const profile = await getCurrentProfile();
 
   const handle =
     profile?.display_name ?? user.email?.split("@")[0] ?? "you";

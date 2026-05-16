@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/me";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata = {
@@ -7,10 +7,7 @@ export const metadata = {
 };
 
 export default async function FriendsPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) redirect("/auth?mode=signin");
 
   return (

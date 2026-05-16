@@ -1,5 +1,5 @@
-import { createClient } from "@/lib/supabase/server";
 import { signOutAction } from "@/lib/auth/actions";
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { SoftButton } from "@/components/ui/button";
 import { AppShell } from "@/components/app-shell";
 
@@ -8,17 +8,9 @@ export const metadata = {
 };
 
 export default async function MePage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return null;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("display_name, created_at")
-    .eq("id", user.id)
-    .maybeSingle();
+  const profile = await getCurrentProfile();
 
   const verifiedAt = user.email_confirmed_at;
 

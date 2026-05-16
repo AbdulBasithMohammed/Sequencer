@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 import { SoftLinkButton } from "@/components/ui/button";
 import { AppShell } from "@/components/app-shell";
@@ -9,10 +9,7 @@ export const metadata = {
 };
 
 export default async function RulesPage() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   const isAuthed = !!user;
 
   const content = (
