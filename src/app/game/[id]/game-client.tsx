@@ -4,22 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Board, type BoardState } from "@/components/game/board";
-import { BoardPanZoom } from "@/components/game/board-pan-zoom";
 import { HandStrip } from "@/components/game/hand-strip";
 import { TurnBanner, type RosterPlayer } from "@/components/game/turn-banner";
+import { WinScreen } from "@/components/game/win-screen";
 import { classifyCard, isDeadCard } from "@/lib/board-layout";
-
-const TEAM_COLOR: Record<number, string> = {
-  1: "var(--color-pink)",
-  2: "var(--color-blue)",
-  3: "var(--color-mint)",
-};
-
-const TEAM_LABEL: Record<number, string> = {
-  1: "Pink",
-  2: "Blue",
-  3: "Mint",
-};
 
 export function GameClient({
   gameId,
@@ -31,6 +19,7 @@ export function GameClient({
   turnDeadline,
   players,
   hand,
+  roomCode,
 }: {
   gameId: string;
   gameVersion: number;
@@ -41,6 +30,7 @@ export function GameClient({
   turnDeadline: string | null;
   players: RosterPlayer[];
   hand: string[];
+  roomCode: string | null;
 }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [burningIdx, setBurningIdx] = useState<number | null>(null);
@@ -138,8 +128,12 @@ export function GameClient({
   return (
     <>
       {gameFinished ? (
-        <div className="mb-3">
-          <WinnerBanner winnerTeam={winnerTeam} myTeam={me?.team ?? null} />
+        <div className="mb-4">
+          <WinScreen
+            winnerTeam={winnerTeam}
+            players={players}
+            roomCode={roomCode}
+          />
         </div>
       ) : (
         <div className="mb-3">
@@ -166,15 +160,13 @@ export function GameClient({
             transform: "translate(-50%, -50%) rotate(90deg)",
           }}
         >
-          <BoardPanZoom>
-            <Board
-              state={board}
-              selectedCard={selectedCard}
-              selectedKind={selectedKind}
-              myTeam={me?.team ?? null}
-              onCellClick={handleCellClick}
-            />
-          </BoardPanZoom>
+          <Board
+            state={board}
+            selectedCard={selectedCard}
+            selectedKind={selectedKind}
+            myTeam={me?.team ?? null}
+            onCellClick={handleCellClick}
+          />
         </div>
       </div>
       <div className="mt-1">
@@ -246,37 +238,3 @@ export function GameClient({
   );
 }
 
-function WinnerBanner({
-  winnerTeam,
-  myTeam,
-}: {
-  winnerTeam: number | null;
-  myTeam: number | null;
-}) {
-  if (winnerTeam == null) {
-    return (
-      <div className="text-center text-[14px] font-semibold text-ink">
-        Game finished.
-      </div>
-    );
-  }
-  const isMe = myTeam === winnerTeam;
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="flex items-center gap-2 text-[16px] font-bold text-ink">
-        <span
-          className="inline-block size-3 rounded-full"
-          style={{ background: TEAM_COLOR[winnerTeam] }}
-          aria-hidden
-        />
-        <span>
-          {TEAM_LABEL[winnerTeam] ?? `Team ${winnerTeam}`} wins
-          {isMe ? " — that's you!" : ""}
-        </span>
-      </div>
-      <div className="text-[11px] text-ink-soft">
-        Rematch flow ships in 7.A.
-      </div>
-    </div>
-  );
-}

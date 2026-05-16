@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -63,7 +64,24 @@ export function HandStrip({
 }) {
   const [hovered, setHovered] = useState<number | null>(null);
   const [dealIdx, setDealIdx] = useState<number | null>(null);
+  const [scale, setScale] = useState(1);
   const prevCardsRef = useRef<string[] | null>(null);
+
+  // Natural fan width (cards at full size) must fit the viewport. On
+  // desktop scale stays at 1; on narrow viewports we shrink the whole
+  // fan so the hand never needs horizontal scrolling. Tap targets keep
+  // their proportional spacing.
+  useLayoutEffect(() => {
+    function update() {
+      const natural = (cards.length - 1) * SPACING + CARD_WIDTH + 140;
+      const available = window.innerWidth - 16;
+      const next = Math.min(1, available / natural);
+      setScale(next);
+    }
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [cards.length]);
 
   // Detect a newly drawn card. The hand has the played card removed and a
   // replacement appended at the end; we diff against the previous render
@@ -114,13 +132,21 @@ export function HandStrip({
 
   return (
     <div
-      className={`overflow-x-auto overflow-y-hidden pt-5 ${disabled ? "opacity-60" : ""}`}
+      className={`overflow-hidden pt-5 ${disabled ? "opacity-60" : ""}`}
     >
       <div
-        className="relative mx-auto"
+        className="mx-auto"
+        style={{
+          width: containerWidth * scale,
+          height: containerHeight * scale,
+        }}
+      >
+      <div
+        className="relative origin-top-left"
         style={{
           width: containerWidth,
           height: containerHeight,
+          transform: `scale(${scale})`,
           pointerEvents: disabled ? "none" : undefined,
         }}
         onMouseLeave={() => setHovered(null)}
@@ -226,6 +252,7 @@ export function HandStrip({
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

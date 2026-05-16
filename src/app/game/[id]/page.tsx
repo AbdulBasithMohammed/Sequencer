@@ -126,6 +126,7 @@ export default async function GamePage({
         turnDeadline={g.turn_deadline}
         players={players}
         hand={hand}
+        roomCode={roomCode ?? null}
       />
     </div>
   );
