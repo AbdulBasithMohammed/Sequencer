@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Wordmark } from "@/components/ui/wordmark";
-import { SoftButton, SoftLinkButton } from "@/components/ui/button";
+import { SoftLinkButton } from "@/components/ui/button";
 import { SoftPill } from "@/components/ui/pill";
 
 const FEATURES = [
@@ -32,22 +32,24 @@ export default async function Home() {
           </Link>
           <nav className="flex items-center gap-2">
             <NavLink href="/rules">How it works</NavLink>
-            <SoftLinkButton
-              href="/auth?mode=signin"
-              size="sm"
-              variant="outline"
-              className="hidden sm:inline-flex"
-            >
-              Sign in
-            </SoftLinkButton>
-            <SoftLinkButton
-              href="/auth?mode=signup"
-              size="sm"
-              variant="primary"
-              className="hidden sm:inline-flex"
-            >
-              Create account
-            </SoftLinkButton>
+            <span className="hidden sm:inline-flex">
+              <SoftLinkButton
+                href="/auth?mode=signin"
+                size="sm"
+                variant="outline"
+              >
+                Sign in
+              </SoftLinkButton>
+            </span>
+            <span className="hidden sm:inline-flex">
+              <SoftLinkButton
+                href="/auth?mode=signup"
+                size="sm"
+                variant="primary"
+              >
+                Create account
+              </SoftLinkButton>
+            </span>
           </nav>
         </header>
 
