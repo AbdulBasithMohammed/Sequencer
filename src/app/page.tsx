@@ -7,7 +7,7 @@ import { SoftPill } from "@/components/ui/pill";
 
 const FEATURES = [
   ["Cozy rooms", "Invite friends with a 6-character code."],
-  ["Your own color", "Pick a chip color and keep it all game."],
+  ["Play as guest", "Pick a nickname, jump in. No account needed."],
   ["Up to 12 players", "Solo, head-to-head, or two big teams."],
   ["Cross-device", "Phone or laptop — refresh anytime, your seat stays."],
 ] as const;
