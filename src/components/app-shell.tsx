@@ -18,7 +18,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="grid flex-1 grid-cols-1 md:grid-cols-[300px_1fr]">
-      <AppSidebar handle={handle} initial={initial} signOut={signOutAction} />
+      <AppSidebar
+        handle={handle}
+        initial={initial}
+        signOut={signOutAction}
+        isGuest={profile?.is_guest ?? false}
+      />
       <main className="overflow-hidden">{children}</main>
     </div>
   );

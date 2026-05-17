@@ -37,8 +37,11 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   if (isProtected(request.nextUrl.pathname)) {
-    const verified = user && user.email_confirmed_at;
-    if (!verified) {
+    // Guests (is_anonymous) get a pass — they don't have an email to
+    // verify but they hold a real session.
+    const allowed =
+      user && (user.is_anonymous || !!user.email_confirmed_at);
+    if (!allowed) {
       const redirectUrl = request.nextUrl.clone();
       redirectUrl.pathname = "/auth";
       redirectUrl.searchParams.set("mode", "signin");

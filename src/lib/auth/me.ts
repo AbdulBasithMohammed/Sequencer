@@ -20,7 +20,7 @@ export const getCurrentProfile = cache(async () => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("display_name, tag, created_at")
+    .select("display_name, tag, created_at, is_guest")
     .eq("id", user.id)
     .maybeSingle();
   return data;

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 import {
   LobbyClient,
@@ -136,7 +137,9 @@ export default async function LobbyPage({
         currentUserId={user.id}
       />
 
-      <InviteFriendsPanel roomId={roomData.id} />
+      {!(await getCurrentProfile())?.is_guest && (
+        <InviteFriendsPanel roomId={roomData.id} />
+      )}
     </div>
   );
 }

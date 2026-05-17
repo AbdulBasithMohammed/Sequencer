@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Wordmark } from "@/components/ui/wordmark";
 
-const NAV = [
+const BASE_NAV = [
   { href: "/play", label: "Play" },
   { href: "/rules", label: "How it works" },
-  { href: "/friends", label: "Friends" },
+  { href: "/friends", label: "Friends", registeredOnly: true },
   { href: "/me", label: "Profile" },
 ];
 
@@ -15,14 +15,19 @@ export function AppSidebar({
   handle,
   initial,
   signOut,
+  isGuest,
 }: {
   handle: string;
   initial: string;
   signOut: () => Promise<void>;
+  isGuest: boolean;
 }) {
   const pathname = usePathname();
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
+  const nav = BASE_NAV.filter(
+    (item) => !("registeredOnly" in item && item.registeredOnly && isGuest),
+  );
 
   return (
     <aside className="flex flex-col gap-2 border-r border-line p-7">
@@ -30,7 +35,7 @@ export function AppSidebar({
         <Wordmark size={22} accent="pink" />
       </Link>
 
-      {NAV.map((item) => (
+      {nav.map((item) => (
         <Link
           key={item.href}
           href={item.href}
@@ -64,7 +69,9 @@ export function AppSidebar({
             >
               @{handle}
             </div>
-            <div className="text-[11px] text-ink-soft">Signed in</div>
+            <div className="text-[11px] text-ink-soft">
+              {isGuest ? "Guest session" : "Signed in"}
+            </div>
           </div>
         </Link>
         <form action={signOut} className="mt-2">
@@ -72,7 +79,7 @@ export function AppSidebar({
             type="submit"
             className="text-[11px] font-semibold text-ink-soft hover:text-ink"
           >
-            Sign out
+            {isGuest ? "Leave guest session" : "Sign out"}
           </button>
         </form>
       </div>

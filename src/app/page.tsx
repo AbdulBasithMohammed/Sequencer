@@ -94,6 +94,16 @@ export default async function Home() {
                 I already play
               </SoftLinkButton>
             </div>
+            <div className="mt-3 text-[13px] text-ink-soft">
+              No account? You can also{" "}
+              <Link
+                href="/guest"
+                className="font-semibold text-ink underline-offset-4 hover:underline"
+              >
+                play as a guest
+              </Link>
+              .
+            </div>
 
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-1 text-[13px] font-medium text-ink-soft">
               <span>Friendly competitive</span>
