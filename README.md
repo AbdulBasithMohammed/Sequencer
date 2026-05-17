@@ -1,26 +1,143 @@
-# Sequencer
+# Sequencr
 
-Online multiplayer implementation of the Jax **Sequence** board game. Two standard decks, jacks-are-wild, five-in-a-row, teams of 2–12.
+**Play the classic Sequence board game online with friends.**
 
-Server-authoritative game state via Postgres RPCs — clients never mutate `games`, `room_players`, or `game_moves` directly. Realtime broadcasts row changes; clients refetch and animate.
+A free, browser-native implementation of Jax's Sequence card-and-board game. 2–12 players, head-to-head or in teams, real-time multiplayer, no installs, no ads.
+
+🌐 **Live:** [sequencr.app](https://sequencr.app)
+
+---
+
+## Highlights
+
+- **Play in seconds** — guest mode with no signup, or a permanent account if you want friends and stats
+- **Real-time multiplayer** — 2–12 players in head-to-head or team formats, with live moves over Supabase Realtime
+- **Server-authoritative rules engine** — Postgres functions enforce every game rule; clients can't cheat by tampering with state
+- **Full Sequence ruleset** — two-eyed jacks, one-eyed jacks, dead-card swap, corner wilds, shared-chip sequences, deck refill
+- **Friends, invites & notifications** — Discord-style `Name #TAG`, friend requests with ignore lists, room invites that pop up as toasts in real-time
+- **Per-turn timer** — server-enforced via `pg_cron`; AFK players auto-discard so games don't stall
+- **Mobile-first responsive layout** — hamburger nav, landscape-rotated board, tap-friendly hand
+- **Storage hygiene** — finished games auto-delete after 5 minutes, stale guest accounts after 24 hours
+
+---
 
 ## Stack
 
-- **Next.js 16** (App Router, Turbopack, React 19 server actions)
-- **Supabase** — Postgres + Auth (email/password) + Realtime + RLS
-- **Tailwind v4** for styling
+| Layer | Choice |
+|---|---|
+| **Framework** | [Next.js 15](https://nextjs.org) (App Router, Turbopack, React Server Components, Server Actions) |
+| **Styling** | [Tailwind v4](https://tailwindcss.com) |
+| **Database** | [Supabase Postgres](https://supabase.com) + Row-Level Security |
+| **Auth** | Supabase Auth (email/password + anonymous sign-ins for guests) |
+| **Realtime** | Supabase Realtime — Broadcast-from-Database + monotonic versions |
+| **Scheduled jobs** | `pg_cron` (turn timer, stale-game cleanup, finished-game GC, guest TTL) |
+| **Hosting** | [Vercel](https://vercel.com) |
 
-## Getting started
+---
+
+## Architecture
+
+The whole app is built around one principle: **the server owns the truth, the client renders it.**
+
+### Server-authoritative state
+
+Every game state mutation goes through a `SECURITY DEFINER` Postgres RPC — `play_move`, `play_wild`, `play_remove`, `swap_dead_card`, `start_game`, `join_room`, etc. RLS blocks direct INSERT/UPDATE/DELETE on `games`, `room_players`, `game_moves`, so a malicious client can't fake a move, a sequence, a chip removal, or a deal.
+
+### Optimistic concurrency
+
+Every RPC takes a `client_version` parameter. The server checks it against `games.version`, rejects on mismatch (`SQLSTATE 40001 — Stale client version`), and increments on success. Two players acting at the exact same tick won't race; one wins, the other refetches and retries.
+
+### Realtime: broadcast-from-database
+
+Postgres triggers call `realtime.send(channel, event, payload)` on every meaningful mutation. Clients subscribe to typed channels:
+
+| Channel | What it covers |
+|---|---|
+| `lobby:<room_id>` | Lobby roster + invites for this room |
+| `game:<game_id>` | Game state version changes |
+| `friends:<user_id>` | Friend request / friendship / ignore changes |
+| `invites:<user_id>` | Room invite arrivals |
+
+Payloads carry just a version number — clients refetch authoritative state via RLS-filtered SELECT. No giant state objects flying over the wire.
+
+### Append-only move log
+
+`game_moves` is keyed on `(game_id, version)` and never updated. Action types: `place`, `remove` (one-eyed jack), `swap_dead`, `auto_discard` (turn-timer boot), `system` (deal, stale cleanup, redetect). The log drives animations on the client and gives us a perfect replay/audit trail.
+
+### Cron-managed lifecycle
+
+| Job | Schedule | Purpose |
+|---|---|---|
+| `sequence-tick-turns` | every 5s | Detect expired `turn_deadline`s and auto-discard for AFK players |
+| `sequence-stale-cleanup` | every 5 min | Mark games inactive 30+ minutes as `finished` |
+| `sequence-delete-finished` | every 5 min | Delete `finished` games + their move logs after 5 min |
+| `sequence-delete-stale-guests` | every hour | Delete anonymous `auth.users` inactive 24+ hours |
+
+---
+
+## Repository layout
+
+```
+src/
+  app/                       # Next.js App Router
+    (app)/                   # Authed route group with shared AppShell layout
+      play/                  # Lobby home for logged-in users
+      me/                    # Profile page
+      friends/               # Friends + requests + ignored
+    auth/                    # Sign in / sign up / password reset
+    guest/                   # Anonymous sign-in flow
+    lobby/[code]/            # Pre-game room with team picker
+    game/[id]/               # The actual game board + hand
+    rules/                   # Sequence rules reference
+    sitemap.ts robots.ts     # SEO
+    page.tsx                 # Marketing landing
+  components/                # Shared UI (AppShell, sidebar, board, hand, etc.)
+  lib/
+    auth/                    # Server-side auth helpers (cache()-deduped)
+    supabase/                # Browser + server clients, middleware
+    invites/                 # Room-invite server actions
+    board-layout.ts          # Canonical 10×10 board layout
+    board-helpers.ts         # Dead-card / classify-card utilities
+supabase/
+  migrations/                # SQL migrations (the source of truth)
+  config.toml                # Project config + linked ref
+tests/                       # SQL test scripts (run via admin API)
+PRD.md ROADMAP.md            # Product spec + build plan
+CLAUDE.md AGENTS.md          # Notes for the AI pair-programmers
+```
+
+---
+
+## Local development
+
+### Prerequisites
+
+- **Node 20+** and **npm**
+- **Supabase CLI** ([install](https://supabase.com/docs/guides/cli)) — we use v2.98+ locally; the project is linked to a hosted Supabase instance, no local Postgres needed
+- A Supabase project of your own if you want to develop against a fresh database
+
+### Setup
 
 ```bash
-# 1. Install deps
+# 1. Install dependencies
 npm install
 
-# 2. Copy env template and fill in your Supabase project values
+# 2. Populate environment variables
 cp .env.example .env.local
-# edit .env.local — see comments in the file
+# Then fill in .env.local — see the file for the exact keys
+```
 
-# 3. Push migrations to your linked Supabase project (one-time)
+`.env.local` needs:
+
+| Variable | What |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Your project's REST URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Publishable anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret, server-only |
+| `SUPABASE_ACCESS_TOKEN` | Personal Access Token (for CLI) |
+
+```bash
+# 3. Link the CLI to your project, then push migrations
 set -a && source .env.local && set +a
 supabase link --project-ref YOUR_PROJECT_REF
 supabase db push
@@ -29,13 +146,83 @@ supabase db push
 npm run dev
 ```
 
-Open <http://localhost:3000>.
+Open <http://localhost:3000>. Sign up with a real email (or play as a guest), and you're in.
 
-## Architectural invariants
+---
 
-- All `games` / `room_players` / `game_moves` mutations go through `SECURITY DEFINER` Postgres functions; RLS blocks direct writes.
-- Optimistic concurrency via `games.version` — RPCs reject stale `client_version`.
-- `game_moves` is append-only; the resulting `version` is the primary key.
-- Hands are private via RLS — `games.hands` is a `jsonb` map keyed by `user_id`; the SELECT projection filters to `auth.uid()`.
-- Realtime broadcasts the `games` row; clients refetch on update and animate from the move log.
-- Per-turn timer enforced server-side by `pg_cron` against `games.turn_deadline`.
+## Database & migrations
+
+Supabase migrations live in `supabase/migrations/` and are the source of truth for schema. Never edit the dashboard SQL editor directly — those changes won't be in git.
+
+```bash
+# Create a new migration
+supabase migration new my_change_name
+
+# Edit the generated SQL file, then push
+supabase db push
+```
+
+The CLI reads credentials from `.env.local`. Source the file or pipe it inline:
+
+```bash
+set -a && source .env.local && set +a && supabase db push
+```
+
+### Running game-logic tests
+
+Each integration test is a self-contained SQL script in `tests/` that:
+
+1. Provisions an isolated room + game inside a transaction
+2. Exercises one or more RPCs with `set_config('request.jwt.claim.sub', ...)` to simulate `auth.uid()`
+3. Asserts invariants (state, version, hand contents, log entries)
+4. Cleans up via `DELETE FROM rooms` (cascades wipe everything)
+
+Run one against the linked project:
+
+```bash
+set -a && source .env.local && set +a && \
+  curl -s -X POST \
+    "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
+    -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+    -H "Content-Type: application/json" \
+    --data-binary @<(jq -Rs '{query: .}' tests/swap-dead-card.sql) | jq .
+```
+
+Available suites:
+
+| File | Coverage |
+|---|---|
+| `tests/swap-dead-card.sql` | Dead-card swap: turn check, non-dead rejection, jack rejection, stale version |
+| `tests/deck-refill.sql` | Deck-empty reshuffle: drain → refill → multiset of cards preserved |
+| `tests/guest-mode.sql` | Anonymous sign-in trigger, friend/invite guards, 1-hour grace, 24-hour TTL |
+
+Each suite returns one row per assertion with `PASS`/`OK`/`FAIL` so you can see exactly which step broke.
+
+---
+
+## Game rules
+
+Full ruleset (deck composition, jacks, corners, shared chips, dead cards, win conditions, deck refill) lives at [/rules](https://sequencr.app/rules) on the deployed site, with a comprehensive summary in [`CLAUDE.md`](./CLAUDE.md).
+
+---
+
+## Roadmap
+
+The complete validation-gated build plan is in [`ROADMAP.md`](./ROADMAP.md). All seven phases (Foundation → Auth → Lobby → Rendering → First Move → Full Rules → Robustness → Polish) are checked off. Subsequent work — guest mode, friends, invites, deck indicator, mobile nav, SEO — is captured in the git log.
+
+---
+
+## Performance & scaling notes
+
+- **Realtime channels are per-resource** (`lobby:<id>`, `friends:<id>`, `invites:<id>`). Each client opens only the channels relevant to its active sessions; cost scales with activity, not total users.
+- **Router Cache** is on with `staleTimes.dynamic = 30` — repeat navigations within 30s skip the server entirely.
+- **AppShell lives in a `(app)/layout.tsx`** so the sidebar stays mounted across child route changes.
+- **Request-scoped fetch dedup** via React's `cache()` keeps `getCurrentUser` + `getCurrentProfile` to a single roundtrip per page render.
+- **Stored generated column** `games.deck_count` exposes deck size without leaking the actual card order.
+- The current architecture comfortably handles hundreds of concurrent users on Supabase Free tier; thousands+ would want Supabase Pro or Team and a per-friend partitioned presence model if presence indicators come back.
+
+---
+
+## Acknowledgments
+
+Game design © Jax Ltd. This is a fan implementation built for friends; not affiliated with or endorsed by Jax.
