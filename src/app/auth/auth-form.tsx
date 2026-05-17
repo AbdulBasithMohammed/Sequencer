@@ -270,6 +270,22 @@ function FormBody({ mode, next }: { mode: Mode; next: string }) {
             ? "Create account"
             : "Sign in"}
       </SoftButton>
+
+      <div className="mt-5 flex items-center gap-3 text-[11px] uppercase tracking-[0.18em] text-ink-soft">
+        <div className="h-px flex-1 bg-line" />
+        <span>or</span>
+        <div className="h-px flex-1 bg-line" />
+      </div>
+
+      <Link
+        href="/guest"
+        className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-line bg-canvas px-4 py-3 text-[14px] font-semibold text-ink transition-colors hover:bg-surface"
+      >
+        Play as a guest <span aria-hidden>→</span>
+      </Link>
+      <p className="mt-2 text-center text-[11px] text-ink-soft">
+        Guests can host and join rooms. No friends, no invites.
+      </p>
     </form>
   );
 }
