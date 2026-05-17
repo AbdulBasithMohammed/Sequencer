@@ -17,7 +17,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   const initial = (profile?.display_name ?? user.email ?? "?")[0]?.toUpperCase() ?? "?";
 
   return (
-    <div className="grid flex-1 grid-cols-1 md:grid-cols-[300px_1fr]">
+    <div className="flex flex-1 flex-col md:grid md:grid-cols-[300px_1fr]">
       <AppSidebar
         handle={handle}
         initial={initial}

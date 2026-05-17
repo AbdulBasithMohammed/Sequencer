@@ -36,6 +36,7 @@ export default async function Home() {
               href="/auth?mode=signin"
               size="sm"
               variant="outline"
+              className="hidden sm:inline-flex"
             >
               Sign in
             </SoftLinkButton>
@@ -43,6 +44,7 @@ export default async function Home() {
               href="/auth?mode=signup"
               size="sm"
               variant="primary"
+              className="hidden sm:inline-flex"
             >
               Create account
             </SoftLinkButton>
