@@ -223,6 +223,12 @@ The complete validation-gated build plan is in [`ROADMAP.md`](./ROADMAP.md). All
 
 ---
 
+## License
+
+Source code in this repository is released under the [MIT License](./LICENSE). Use it, learn from it, fork it. **Sequence®** is a registered trademark of Jax Ltd. — not licensed here. This project is an unaffiliated fan implementation.
+
+---
+
 ## Acknowledgments
 
 Game design © Jax Ltd. This is a fan implementation built for friends; not affiliated with or endorsed by Jax.
