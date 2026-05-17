@@ -5,7 +5,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { ResetForm } from "./reset-form";
 
 export const metadata = {
-  title: "Set a new password — Sequencr",
+  title: "Set a new password",
 };
 
 export default async function ResetPage() {

@@ -5,7 +5,10 @@ import { SoftLinkButton } from "@/components/ui/button";
 import { AppShell } from "@/components/app-shell";
 
 export const metadata = {
-  title: "How to play — Sequencr",
+  title: "Sequence Rules — How to Play",
+  description:
+    "Full rules for the Sequence board game. 104 cards, 10×10 board, two-eyed and one-eyed jacks, dead-card swap, win conditions for 2 and 3 teams, and shared-chip sequences explained.",
+  alternates: { canonical: "/rules" },
 };
 
 export default async function RulesPage() {
@@ -38,12 +41,12 @@ export default async function RulesPage() {
         className="font-display font-bold leading-[0.95]"
         style={{ fontSize: "clamp(44px, 6vw, 64px)", letterSpacing: "-0.03em" }}
       >
-        How to play
+        How to play Sequence
       </h1>
       <p className="mt-4 max-w-[560px] text-[16px] leading-[1.5] text-ink-soft">
-        Five chips in a row, on a 10×10 grid of playing cards. Place your
-        chips on cells matching the cards in your hand. First team to two
-        sequences wins.
+        Sequence is a 2-to-12 player card-and-board game: five chips in a
+        row on a 10×10 grid of playing cards. Place your chips on cells
+        matching the cards in your hand. First team to two sequences wins.
       </p>
 
       <Section title="The goal">

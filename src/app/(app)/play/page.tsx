@@ -5,7 +5,7 @@ import { KickBanToast } from "./kick-ban-toast";
 import { NoticeToast } from "./notice-toast";
 
 export const metadata = {
-  title: "Lobby — Sequencr",
+  title: "Lobby",
 };
 
 export default async function PlayPage({

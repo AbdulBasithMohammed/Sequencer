@@ -13,7 +13,7 @@ import {
 import { InviteFriendsPanel } from "./invite-friends-panel";
 
 export const metadata = {
-  title: "Room — Sequencr",
+  title: "Room",
 };
 
 export default async function LobbyPage({

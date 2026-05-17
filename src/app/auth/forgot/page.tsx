@@ -3,7 +3,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { ForgotForm } from "./forgot-form";
 
 export const metadata = {
-  title: "Reset your password — Sequencr",
+  title: "Reset your password",
 };
 
 export default function ForgotPage() {

@@ -3,7 +3,7 @@ import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { SoftButton } from "@/components/ui/button";
 
 export const metadata = {
-  title: "Profile — Sequencr",
+  title: "Profile",
 };
 
 export default async function MePage() {

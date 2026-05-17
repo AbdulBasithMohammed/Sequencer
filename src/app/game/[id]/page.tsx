@@ -8,7 +8,7 @@ import { GameClient } from "./game-client";
 import { GameRefresher } from "./game-refresher";
 
 export const metadata = {
-  title: "Game — Sequencr",
+  title: "Game",
 };
 
 export default async function GamePage({

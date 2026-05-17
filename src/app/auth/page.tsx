@@ -9,7 +9,7 @@ import { AuthForm } from "./auth-form";
 import { QuoteCycler } from "@/components/ui/quote-cycler";
 
 export const metadata = {
-  title: "Sign in to Sequencr",
+  title: "Sign in",
 };
 
 const URL_MESSAGES: Record<string, string> = {

@@ -5,7 +5,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { SoftLinkButton } from "@/components/ui/button";
 
 export const metadata = {
-  title: "Welcome to Sequencr",
+  title: "Welcome",
 };
 
 export default async function WelcomePage() {

@@ -5,7 +5,7 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { GuestSignInForm } from "./guest-form";
 
 export const metadata = {
-  title: "Play as guest — Sequencr",
+  title: "Play as guest",
 };
 
 export default async function GuestPage() {

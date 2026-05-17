@@ -4,7 +4,7 @@ import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { FriendsClient, type FriendsData } from "./friends-client";
 
 export const metadata = {
-  title: "Friends — Sequencr",
+  title: "Friends",
 };
 
 export default async function FriendsPage() {
