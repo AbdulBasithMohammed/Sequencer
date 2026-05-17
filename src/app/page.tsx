@@ -181,47 +181,6 @@ export default async function Home() {
             </div>
           ))}
         </section>
-
-        {/* SEO-friendly long-form block. Real prose, real keywords,
-            real internal links — no hidden text. */}
-        <section className="mx-auto max-w-[760px] pb-14 pt-2">
-          <h2
-            className="font-display font-bold leading-tight"
-            style={{ fontSize: "clamp(24px, 3vw, 32px)", letterSpacing: "-0.02em" }}
-          >
-            The Sequence board game, online.
-          </h2>
-          <p className="mt-3 text-[15px] leading-[1.65] text-ink-soft">
-            Sequencr is a free, browser-based way to play the classic{" "}
-            <strong className="text-ink">Sequence</strong> card-and-board
-            game with friends. The board is a 10×10 grid of playing cards.
-            On your turn, play a card from your hand and place one of your
-            team&apos;s chips on a matching open tile. Two-eyed jacks are
-            wild and place anywhere; one-eyed jacks remove an opponent&apos;s
-            chip. First team to two five-in-a-rows wins (one in 3-team
-            games). Read the full{" "}
-            <Link
-              href="/rules"
-              className="font-semibold text-ink underline-offset-4 hover:underline"
-            >
-              Sequence rules
-            </Link>
-            , or jump straight in as a{" "}
-            <Link
-              href="/guest"
-              className="font-semibold text-ink underline-offset-4 hover:underline"
-            >
-              guest
-            </Link>{" "}
-            without an account.
-          </p>
-          <p className="mt-3 text-[15px] leading-[1.65] text-ink-soft">
-            Built for 2 to 12 players — solo head-to-head, two teams, or
-            three. No installs, no ads, no spectator paywalls. Your room
-            code is a 6-character handle that you can drop into any chat
-            to invite people in seconds.
-          </p>
-        </section>
       </div>
 
       {/* JSON-LD: tell search engines this is a multiplayer board game
