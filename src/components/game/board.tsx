@@ -106,19 +106,13 @@ function Cell({
   onClick?: () => void;
 }) {
   const wild = card === null;
-  // Soft, non-pulsing tint for the most recent move so everyone can see
-  // where the last action happened. Placement → team color halo; removal
-  // → neutral ink halo (cell is empty by now). Suppress while the
+  // Soft, non-pulsing warm-gold halo on the most recent move so everyone
+  // can see where the last action happened. Universal across teams (the
+  // chip's own color tells you whose turn it was). Suppressed while the
   // placement-pulse is active so the two visuals don't fight.
   const showLast = isLast && !isMatch;
-  const lastColor =
-    lastAction === "remove" || chip.team === null
-      ? "rgba(27, 21, 48, 0.45)"
-      : chip.team === 1
-        ? "rgba(255, 92, 138, 0.7)"
-        : chip.team === 2
-          ? "rgba(91, 124, 250, 0.7)"
-          : "rgba(123, 216, 181, 0.75)";
+  const lastOutline = "rgba(255, 210, 63, 0.95)";
+  const lastGlow = "rgba(255, 210, 63, 0.7)";
   return (
     <div
       className={`relative rounded-[6px] ${onClick ? "cursor-pointer" : ""} ${isMatch ? "animate-[pulse_1.4s_ease-in-out_infinite]" : ""}`}
@@ -127,13 +121,13 @@ function Cell({
         outline: isMatch
           ? "2px solid var(--color-pink)"
           : showLast
-            ? `1.5px solid ${lastColor}`
+            ? `1.5px solid ${lastOutline}`
             : undefined,
         outlineOffset: isMatch ? 1 : showLast ? 0 : undefined,
         boxShadow: isMatch
           ? "0 0 14px rgba(255,92,138,0.55)"
           : showLast
-            ? `0 0 10px ${lastColor}`
+            ? `0 0 12px ${lastGlow}`
             : undefined,
         zIndex: isMatch ? 5 : showLast ? 3 : undefined,
       }}
