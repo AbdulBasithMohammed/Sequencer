@@ -8,6 +8,8 @@ import { HandStrip } from "@/components/game/hand-strip";
 import { TurnBanner, type RosterPlayer } from "@/components/game/turn-banner";
 import { WinScreen } from "@/components/game/win-screen";
 import { classifyCard, isDeadCard } from "@/lib/board-layout";
+import { playTurnBlip } from "@/lib/sound/turn-blip";
+import { isMuted } from "@/components/game/mute-toggle";
 
 export function GameClient({
   gameId,
@@ -44,6 +46,7 @@ export function GameClient({
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
   const lastHandSigRef = useRef<string>(hand.join(","));
+  const lastTurnSeatRef = useRef<number | null>(turnSeat);
 
   useEffect(() => {
     const sig = hand.join(",");
@@ -52,6 +55,17 @@ export function GameClient({
       setBurningIdx(null);
     }
   }, [hand]);
+
+  // Subtle audio cue on any turn change. Skipped on initial mount
+  // (ref starts equal to the prop) and when muted (persisted in
+  // localStorage via MuteToggle in the header).
+  useEffect(() => {
+    if (lastTurnSeatRef.current === turnSeat) return;
+    lastTurnSeatRef.current = turnSeat;
+    if (status !== "in_game") return;
+    if (isMuted()) return;
+    playTurnBlip();
+  }, [turnSeat, status]);
 
   const me = players.find((p) => p.is_me) ?? null;
   const gameFinished = status === "finished";

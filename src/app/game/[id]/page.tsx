@@ -6,6 +6,7 @@ import { type BoardState } from "@/components/game/board";
 import { type RosterPlayer } from "@/components/game/turn-banner";
 import { GameClient } from "./game-client";
 import { GameRefresher } from "./game-refresher";
+import { MuteToggle } from "@/components/game/mute-toggle";
 
 export const metadata = {
   title: "Game",
@@ -117,12 +118,15 @@ export default async function GamePage({
         <Link href="/" aria-label="Sequencr home">
           <Wordmark size={22} accent="pink" />
         </Link>
-        <Link
-          href="/play"
-          className="text-[13px] font-semibold text-ink-soft hover:text-ink"
-        >
-          ← Back to play
-        </Link>
+        <div className="flex items-center gap-3">
+          <MuteToggle />
+          <Link
+            href="/play"
+            className="text-[13px] font-semibold text-ink-soft hover:text-ink"
+          >
+            ← Back to play
+          </Link>
+        </div>
       </header>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
