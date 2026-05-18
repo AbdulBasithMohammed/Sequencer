@@ -19,8 +19,10 @@ import {
   banPlayerAction,
   kickPlayerAction,
   setReadyAction,
+  setTargetSequencesAction,
   setTeamAction,
   setTeamLayoutAction,
+  setTurnSecondsAction,
   startGameAction,
   swapTeamsAction,
   transferHostAction,
@@ -53,6 +55,8 @@ export type Room = {
   target_players: number;
   team_layout: string;
   status: string;
+  turn_seconds: number;
+  target_sequences: number | null;
 };
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -67,6 +71,8 @@ const LAYOUT_OPTIONS: Record<number, string[]> = {
   6: ["3v3", "2v2v2"],
   12: ["6v6", "4v4v4"],
 };
+
+const TURN_SECONDS_PRESETS = [30, 45, 60, 90, 120];
 
 function teamsForLayout(layout: string): number[] {
   switch (layout) {
@@ -207,6 +213,22 @@ export function LobbyClient({
     });
   };
 
+  const handleSetTurnSeconds = (seconds: number) => {
+    startTransition(async () => {
+      await setTurnSecondsAction(
+        fd({ roomId: room.id, seconds: String(seconds) }),
+      );
+    });
+  };
+
+  const handleSetTargetSequences = (n: number | null) => {
+    startTransition(async () => {
+      await setTargetSequencesAction(
+        fd({ roomId: room.id, n: n === null ? "" : String(n) }),
+      );
+    });
+  };
+
   const handleSwapTeams = (userA: string, userB: string) => {
     if (userA === userB) return;
     startTransition(async () => {
@@ -303,31 +325,19 @@ export function LobbyClient({
           Share this code with friends so they can join.
         </p>
 
-        {meIsHost && validLayouts && (
-          <div className="mt-5 inline-flex items-center gap-1 rounded-2xl border border-line bg-surface p-1">
-            {validLayouts.map((opt) => {
-              const active = room.team_layout === opt;
-              return (
-                <button
-                  key={opt}
-                  type="button"
-                  onClick={() => handleSetLayout(opt)}
-                  className={`rounded-xl px-3 py-1.5 text-[13px] font-semibold transition-colors ${
-                    active
-                      ? "bg-ink text-canvas"
-                      : "text-ink-soft hover:text-ink"
-                  }`}
-                >
-                  {opt}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <RoomSettings
+          room={room}
+          layoutTeams={layoutTeams}
+          validLayouts={validLayouts}
+          meIsHost={meIsHost}
+          onSetLayout={handleSetLayout}
+          onSetTurnSeconds={handleSetTurnSeconds}
+          onSetTargetSequences={handleSetTargetSequences}
+        />
 
         {meIsHost && (
           <p className="mt-3 text-[11px] text-ink-soft">
-            Drag a player between teams to reassign.
+            Drag a player between teams to reassign, or onto a teammate to swap.
           </p>
         )}
       </div>
@@ -428,6 +438,120 @@ export function LobbyClient({
         ) : null}
       </div>
     </>
+  );
+}
+
+// ─── RoomSettings ──────────────────────────────────────────────────────────
+//
+// One row of pill-pickers for the host (layout, turn timer, win target).
+// Non-hosts see the same row as read-only chips.
+
+function RoomSettings({
+  room,
+  layoutTeams,
+  validLayouts,
+  meIsHost,
+  onSetLayout,
+  onSetTurnSeconds,
+  onSetTargetSequences,
+}: {
+  room: Room;
+  layoutTeams: number[];
+  validLayouts: string[] | null;
+  meIsHost: boolean;
+  onSetLayout: (layout: string) => void;
+  onSetTurnSeconds: (seconds: number) => void;
+  onSetTargetSequences: (n: number | null) => void;
+}) {
+  // 3 teams always need exactly 1 sequence; hide the picker entirely.
+  const showSeqPicker = layoutTeams.length === 2;
+  const defaultSeq = layoutTeams.length === 3 ? 1 : 2;
+  const effectiveSeq = room.target_sequences ?? defaultSeq;
+
+  return (
+    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+      {validLayouts && (
+        <SettingPicker
+          label="Layout"
+          options={validLayouts.map((opt) => ({ label: opt, value: opt }))}
+          value={room.team_layout}
+          onChange={(v) => onSetLayout(String(v))}
+          disabled={!meIsHost}
+        />
+      )}
+      <SettingPicker
+        label="Turn"
+        options={TURN_SECONDS_PRESETS.map((s) => ({
+          label: `${s}s`,
+          value: s,
+        }))}
+        value={room.turn_seconds}
+        onChange={(v) => onSetTurnSeconds(Number(v))}
+        disabled={!meIsHost}
+      />
+      {showSeqPicker && (
+        <SettingPicker
+          label="Win"
+          options={[
+            { label: "1 seq", value: 1 },
+            { label: "2 seqs", value: 2 },
+          ]}
+          value={effectiveSeq}
+          onChange={(v) => onSetTargetSequences(Number(v))}
+          disabled={!meIsHost}
+        />
+      )}
+    </div>
+  );
+}
+
+function SettingPicker<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+  disabled,
+}: {
+  label: string;
+  options: { label: string; value: T }[];
+  value: T;
+  onChange: (v: T) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-2xl border border-line bg-surface p-1 pl-2.5">
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+        {label}
+      </span>
+      <div className="inline-flex items-center gap-1">
+        {options.map((opt) => {
+          const active = value === opt.value;
+          if (disabled) {
+            if (!active) return null;
+            return (
+              <span
+                key={String(opt.value)}
+                className="rounded-xl bg-ink px-2.5 py-1 text-[12px] font-semibold text-canvas"
+              >
+                {opt.label}
+              </span>
+            );
+          }
+          return (
+            <button
+              key={String(opt.value)}
+              type="button"
+              onClick={() => onChange(opt.value)}
+              className={`rounded-xl px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+                active ? "bg-ink text-canvas" : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

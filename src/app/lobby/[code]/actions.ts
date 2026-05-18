@@ -57,6 +57,34 @@ export async function swapTeamsAction(formData: FormData) {
   revalidateLobby();
 }
 
+export async function setTurnSecondsAction(formData: FormData) {
+  const roomId = String(formData.get("roomId") ?? "");
+  const seconds = Number(formData.get("seconds"));
+  if (!roomId || ![30, 45, 60, 90, 120].includes(seconds)) return;
+
+  const supabase = await createClient();
+  await supabase.rpc("set_turn_seconds", {
+    p_room_id: roomId,
+    p_seconds: seconds,
+  });
+  revalidateLobby();
+}
+
+export async function setTargetSequencesAction(formData: FormData) {
+  const roomId = String(formData.get("roomId") ?? "");
+  const raw = formData.get("n");
+  const n = raw === null || raw === "" ? null : Number(raw);
+  if (!roomId) return;
+  if (n !== null && ![1, 2].includes(n)) return;
+
+  const supabase = await createClient();
+  await supabase.rpc("set_target_sequences", {
+    p_room_id: roomId,
+    p_n: n,
+  });
+  revalidateLobby();
+}
+
 export async function setReadyAction(formData: FormData) {
   const roomId = String(formData.get("roomId") ?? "");
   const ready = formData.get("ready") === "true";

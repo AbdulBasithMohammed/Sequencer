@@ -107,6 +107,8 @@ export default async function LobbyPage({
     target_players: room.target_players,
     team_layout: room.team_layout,
     status: room.status,
+    turn_seconds: room.turn_seconds,
+    target_sequences: room.target_sequences ?? null,
   };
 
   // Three-team layouts need a wider page so each card has the same width
