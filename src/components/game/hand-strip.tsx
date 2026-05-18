@@ -66,21 +66,28 @@ export function HandStrip({
   const [dealIdx, setDealIdx] = useState<number | null>(null);
   const [scale, setScale] = useState(1);
   const prevCardsRef = useRef<string[] | null>(null);
+  const sizerRef = useRef<HTMLDivElement | null>(null);
 
-  // Natural fan width (cards at full size) must fit the viewport. On
-  // desktop scale stays at 1; on narrow viewports we shrink the whole
-  // fan so the hand never needs horizontal scrolling. Tap targets keep
-  // their proportional spacing.
+  // Natural fan width (cards at full size) must fit the available *layout*
+  // width — measured from a parent box, not the viewport. Using
+  // window.innerWidth made the fan re-scale during iOS pinch-zoom; a
+  // ResizeObserver on our own container only fires when the actual
+  // layout box changes, so the hand stays put when users zoom in/out.
   useLayoutEffect(() => {
-    function update() {
-      const natural = (cards.length - 1) * SPACING + CARD_WIDTH + 140;
-      const available = window.innerWidth - 16;
-      const next = Math.min(1, available / natural);
-      setScale(next);
+    const el = sizerRef.current;
+    if (!el) return;
+    const natural = (cards.length - 1) * SPACING + CARD_WIDTH + 140;
+    function update(width: number) {
+      const available = Math.max(0, width - 16);
+      setScale(Math.min(1, available / natural));
     }
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    update(el.clientWidth);
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? el.clientWidth;
+      update(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [cards.length]);
 
   // Detect a newly drawn card. The hand has the played card removed and a
@@ -132,7 +139,8 @@ export function HandStrip({
 
   return (
     <div
-      className={`overflow-hidden pt-5 ${disabled ? "opacity-60" : ""}`}
+      ref={sizerRef}
+      className={`w-full overflow-hidden pt-5 ${disabled ? "opacity-60" : ""}`}
     >
       <div
         className="mx-auto"
