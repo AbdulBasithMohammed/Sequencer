@@ -27,12 +27,14 @@ export function Board({
   selectedKind,
   myTeam,
   onCellClick,
+  lastMove,
 }: {
   state: BoardState;
   selectedCard?: string | null;
   selectedKind?: SelectedKind | null;
   myTeam?: number | null;
   onCellClick?: (row: number, col: number) => void;
+  lastMove?: { row: number; col: number; action: "place" | "remove" } | null;
 }) {
   return (
     <div
@@ -61,6 +63,8 @@ export function Board({
                 : selectedCard != null &&
                   card === selectedCard &&
                   empty;
+          const isLast =
+            lastMove != null && lastMove.row === r && lastMove.col === c;
           return (
             <Cell
               key={`${r}-${c}`}
@@ -69,6 +73,8 @@ export function Board({
               row={r}
               col={c}
               isMatch={isMatch}
+              isLast={isLast}
+              lastAction={isLast ? lastMove.action : null}
               onClick={
                 isMatch && onCellClick ? () => onCellClick(r, c) : undefined
               }
@@ -86,6 +92,8 @@ function Cell({
   row,
   col,
   isMatch,
+  isLast,
+  lastAction,
   onClick,
 }: {
   card: BoardCard;
@@ -93,18 +101,41 @@ function Cell({
   row: number;
   col: number;
   isMatch: boolean;
+  isLast: boolean;
+  lastAction: "place" | "remove" | null;
   onClick?: () => void;
 }) {
   const wild = card === null;
+  // Soft, non-pulsing tint for the most recent move so everyone can see
+  // where the last action happened. Placement → team color halo; removal
+  // → neutral ink halo (cell is empty by now). Suppress while the
+  // placement-pulse is active so the two visuals don't fight.
+  const showLast = isLast && !isMatch;
+  const lastColor =
+    lastAction === "remove" || chip.team === null
+      ? "rgba(27, 21, 48, 0.45)"
+      : chip.team === 1
+        ? "rgba(255, 92, 138, 0.7)"
+        : chip.team === 2
+          ? "rgba(91, 124, 250, 0.7)"
+          : "rgba(123, 216, 181, 0.75)";
   return (
     <div
       className={`relative rounded-[6px] ${onClick ? "cursor-pointer" : ""} ${isMatch ? "animate-[pulse_1.4s_ease-in-out_infinite]" : ""}`}
       style={{
         aspectRatio: CELL_ASPECT,
-        outline: isMatch ? "2px solid var(--color-pink)" : undefined,
-        outlineOffset: isMatch ? 1 : undefined,
-        boxShadow: isMatch ? "0 0 14px rgba(255,92,138,0.55)" : undefined,
-        zIndex: isMatch ? 5 : undefined,
+        outline: isMatch
+          ? "2px solid var(--color-pink)"
+          : showLast
+            ? `1.5px solid ${lastColor}`
+            : undefined,
+        outlineOffset: isMatch ? 1 : showLast ? 0 : undefined,
+        boxShadow: isMatch
+          ? "0 0 14px rgba(255,92,138,0.55)"
+          : showLast
+            ? `0 0 10px ${lastColor}`
+            : undefined,
+        zIndex: isMatch ? 5 : showLast ? 3 : undefined,
       }}
       onClick={onClick}
     >

@@ -22,6 +22,7 @@ export function GameClient({
   roomCode,
   deckCount,
   discardCount,
+  lastMove,
 }: {
   gameId: string;
   gameVersion: number;
@@ -35,6 +36,7 @@ export function GameClient({
   roomCode: string | null;
   deckCount: number;
   discardCount: number;
+  lastMove: { row: number; col: number; action: "place" | "remove" } | null;
 }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [burningIdx, setBurningIdx] = useState<number | null>(null);
@@ -170,6 +172,7 @@ export function GameClient({
             selectedKind={selectedKind}
             myTeam={me?.team ?? null}
             onCellClick={handleCellClick}
+            lastMove={lastMove}
           />
         </div>
       </div>

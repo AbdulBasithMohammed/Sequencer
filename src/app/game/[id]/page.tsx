@@ -54,14 +54,38 @@ export default async function GamePage({
   const g = game as unknown as GameRow;
   const roomCode = Array.isArray(g.rooms) ? g.rooms[0]?.code : g.rooms?.code;
 
-  const [{ data: rpRows }, { data: handData }] = await Promise.all([
-    supabase
-      .from("room_players")
-      .select("user_id, seat_index, team, profiles(display_name)")
-      .eq("room_id", g.room_id)
-      .order("seat_index"),
-    supabase.rpc("get_my_hand", { p_game_id: g.id }),
-  ]);
+  const [{ data: rpRows }, { data: handData }, { data: lastMoveRows }] =
+    await Promise.all([
+      supabase
+        .from("room_players")
+        .select("user_id, seat_index, team, profiles(display_name)")
+        .eq("room_id", g.room_id)
+        .order("seat_index"),
+      supabase.rpc("get_my_hand", { p_game_id: g.id }),
+      supabase
+        .from("game_moves")
+        .select("action, tile_row, tile_col")
+        .eq("game_id", g.id)
+        .in("action", ["place", "remove"])
+        .not("tile_row", "is", null)
+        .order("version", { ascending: false })
+        .limit(1),
+    ]);
+
+  type LastMoveRow = {
+    action: string;
+    tile_row: number;
+    tile_col: number;
+  };
+  const lmRows = (lastMoveRows ?? []) as LastMoveRow[];
+  const lastMove =
+    lmRows.length > 0
+      ? {
+          row: lmRows[0].tile_row,
+          col: lmRows[0].tile_col,
+          action: lmRows[0].action as "place" | "remove",
+        }
+      : null;
 
   type RpRow = {
     user_id: string;
@@ -131,6 +155,7 @@ export default async function GamePage({
         roomCode={roomCode ?? null}
         deckCount={g.deck_count}
         discardCount={Array.isArray(g.discard) ? g.discard.length : 0}
+        lastMove={lastMove}
       />
     </div>
   );
