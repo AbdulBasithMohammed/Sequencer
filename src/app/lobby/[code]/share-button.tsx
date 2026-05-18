@@ -11,15 +11,17 @@ export function ShareButton({ code }: { code: string }) {
       typeof window !== "undefined"
         ? `${window.location.origin}/join/${code}`
         : `https://sequencr.app/join/${code}`;
+    const message = `Join my Sequence room: ${url}`;
 
-    // Try the native share sheet (mobile) first. Pass `url` only — many
-    // clients (iMessage, WhatsApp) concatenate text + url and would
-    // render the link twice.
+    // Try the native share sheet (mobile) first. Pass only `text` (with
+    // the URL inline) — iMessage and WhatsApp concat text + url and
+    // would render the link twice if we also set `url`. Receivers still
+    // get a tappable preview thanks to auto-link detection.
     if (typeof navigator !== "undefined" && "share" in navigator) {
       try {
         await navigator.share({
           title: `Sequence · Room ${code}`,
-          url,
+          text: message,
         });
         return;
       } catch {
