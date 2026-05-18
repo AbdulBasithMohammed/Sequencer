@@ -331,11 +331,8 @@ export function LobbyClient({
         >
           {room.code}
         </div>
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex justify-center">
           <ShareButton code={room.code} />
-          <p className="text-[12px] text-ink-soft">
-            Anyone with the link can join — no code typing.
-          </p>
         </div>
 
         <RoomSettings
