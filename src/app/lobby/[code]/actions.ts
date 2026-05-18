@@ -42,6 +42,21 @@ export async function setTeamAction(formData: FormData) {
   revalidateLobby();
 }
 
+export async function swapTeamsAction(formData: FormData) {
+  const roomId = String(formData.get("roomId") ?? "");
+  const userA = String(formData.get("userA") ?? "");
+  const userB = String(formData.get("userB") ?? "");
+  if (!roomId || !userA || !userB || userA === userB) return;
+
+  const supabase = await createClient();
+  await supabase.rpc("swap_teams", {
+    p_room_id: roomId,
+    p_user_a: userA,
+    p_user_b: userB,
+  });
+  revalidateLobby();
+}
+
 export async function setReadyAction(formData: FormData) {
   const roomId = String(formData.get("roomId") ?? "");
   const ready = formData.get("ready") === "true";

@@ -22,6 +22,7 @@ import {
   setTeamAction,
   setTeamLayoutAction,
   startGameAction,
+  swapTeamsAction,
   transferHostAction,
   unbanPlayerAction,
 } from "./actions";
@@ -82,6 +83,7 @@ function teamsForLayout(layout: string): number[] {
 
 type OptimisticAction =
   | { type: "set_team"; userId: string; team: number }
+  | { type: "swap_teams"; userA: string; userB: string }
   | { type: "set_ready"; userId: string; ready: boolean }
   | { type: "set_token_color"; userId: string; color: TokenColor }
   | { type: "remove"; userId: string };
@@ -92,6 +94,16 @@ function playersReducer(state: Player[], action: OptimisticAction): Player[] {
       return state.map((p) =>
         p.user_id === action.userId ? { ...p, team: action.team } : p,
       );
+    case "swap_teams": {
+      const a = state.find((p) => p.user_id === action.userA);
+      const b = state.find((p) => p.user_id === action.userB);
+      if (!a || !b) return state;
+      return state.map((p) => {
+        if (p.user_id === action.userA) return { ...p, team: b.team };
+        if (p.user_id === action.userB) return { ...p, team: a.team };
+        return p;
+      });
+    }
     case "set_ready":
       return state.map((p) =>
         p.user_id === action.userId ? { ...p, ready: action.ready } : p,
@@ -195,19 +207,42 @@ export function LobbyClient({
     });
   };
 
+  const handleSwapTeams = (userA: string, userB: string) => {
+    if (userA === userB) return;
+    startTransition(async () => {
+      addOptimistic({ type: "swap_teams", userA, userB });
+      await swapTeamsAction(fd({ roomId: room.id, userA, userB }));
+    });
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     if (!event.over) return;
     const userId = String(event.active.id);
     const overId = String(event.over.id);
-    if (!overId.startsWith("team-")) return;
-    const targetTeam = Number(overId.slice(5));
     const player = optimisticPlayers.find((p) => p.user_id === userId);
-    if (!player || player.team === targetTeam) return;
-    const occupants = optimisticPlayers.filter(
-      (p) => p.team === targetTeam && p.user_id !== userId,
-    ).length;
-    if (occupants >= teamCapacity) return;
-    handleSetTeam(userId, targetTeam);
+    if (!player) return;
+
+    // Dropped on another player chip → swap their teams (if different).
+    if (overId.startsWith("player-")) {
+      const targetUserId = overId.slice(7);
+      if (targetUserId === userId) return;
+      const target = optimisticPlayers.find((p) => p.user_id === targetUserId);
+      if (!target) return;
+      if (player.team === target.team) return;
+      handleSwapTeams(userId, targetUserId);
+      return;
+    }
+
+    // Dropped on an empty team zone → move (capacity-checked).
+    if (overId.startsWith("team-")) {
+      const targetTeam = Number(overId.slice(5));
+      if (player.team === targetTeam) return;
+      const occupants = optimisticPlayers.filter(
+        (p) => p.team === targetTeam && p.user_id !== userId,
+      ).length;
+      if (occupants >= teamCapacity) return;
+      handleSetTeam(userId, targetTeam);
+    }
   };
 
   // ─── Derived state ────────────────────────────────────────────────────
@@ -483,11 +518,25 @@ function DraggablePlayerCard({
   onBan: (userId: string) => void;
   onTransferHost: (userId: string) => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id: player.user_id,
-      disabled: !meIsHost,
-    });
+  const {
+    attributes,
+    listeners,
+    setNodeRef: setDragRef,
+    transform,
+    isDragging,
+  } = useDraggable({
+    id: player.user_id,
+    disabled: !meIsHost,
+  });
+  const { setNodeRef: setDropRef, isOver: isSwapOver } = useDroppable({
+    id: `player-${player.user_id}`,
+    disabled: !meIsHost,
+  });
+
+  const setNodeRef = (el: HTMLElement | null) => {
+    setDragRef(el);
+    setDropRef(el);
+  };
 
   const dragStyle = transform
     ? {
@@ -512,9 +561,13 @@ function DraggablePlayerCard({
         ...dragStyle,
         zIndex: isDragging ? 50 : undefined,
       }}
-      className={`rounded-xl border border-line bg-surface p-3 ${
-        isDragging ? "opacity-50 shadow-lg" : ""
-      } ${meIsHost ? "cursor-grab active:cursor-grabbing" : ""}`}
+      className={`rounded-xl border bg-surface p-3 transition-colors ${
+        isSwapOver && !isDragging
+          ? "border-ink ring-2 ring-ink/20"
+          : "border-line"
+      } ${isDragging ? "opacity-50 shadow-lg" : ""} ${
+        meIsHost ? "cursor-grab active:cursor-grabbing" : ""
+      }`}
       {...dragProps}
     >
       <div className="flex items-center gap-2.5">
