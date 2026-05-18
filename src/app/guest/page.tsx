@@ -8,13 +8,22 @@ export const metadata = {
   title: "Play as guest",
 };
 
-export default async function GuestPage() {
-  // Already logged in (registered or guest) → straight to /play.
+export default async function GuestPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const params = await searchParams;
+  const next = params.next ?? "/play";
+  const safeNext =
+    next.startsWith("/") && !next.startsWith("//") ? next : "/play";
+
+  // Already logged in (registered or guest) → go straight to next.
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) redirect("/play");
+  if (user) redirect(safeNext);
 
   return (
     <div className="mx-auto flex w-full max-w-[560px] flex-1 flex-col px-6 py-8 lg:px-10">
@@ -44,13 +53,13 @@ export default async function GuestPage() {
       </p>
 
       <div className="mt-8 rounded-3xl border border-line bg-surface p-6">
-        <GuestSignInForm />
+        <GuestSignInForm next={safeNext} />
       </div>
 
       <p className="mt-6 text-[12px] text-ink-soft">
         Want friends, invites, and a permanent profile?{" "}
         <Link
-          href="/auth?mode=signup"
+          href={`/auth?mode=signup&next=${encodeURIComponent(safeNext)}`}
           className="font-semibold text-ink underline-offset-4 hover:underline"
         >
           Create an account instead

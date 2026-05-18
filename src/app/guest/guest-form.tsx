@@ -7,7 +7,7 @@ import { SoftButton } from "@/components/ui/button";
 
 const MAX_NICKNAME = 20;
 
-export function GuestSignInForm() {
+export function GuestSignInForm({ next = "/play" }: { next?: string }) {
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -34,7 +34,7 @@ export function GuestSignInForm() {
         setError(signInError.message);
         return;
       }
-      router.replace("/play");
+      router.replace(next);
       router.refresh();
     });
   }

@@ -15,6 +15,7 @@ import { SoftButton } from "@/components/ui/button";
 import { SoftPill } from "@/components/ui/pill";
 import { LobbyRefresher } from "./lobby-refresher";
 import { LeaveButton } from "./leave-button";
+import { ShareButton } from "./share-button";
 import {
   banPlayerAction,
   kickPlayerAction,
@@ -330,9 +331,12 @@ export function LobbyClient({
         >
           {room.code}
         </div>
-        <p className="mt-3 max-w-[400px] text-[14px] text-ink-soft">
-          Share this code with friends so they can join.
-        </p>
+        <div className="mt-4 flex items-center gap-3">
+          <ShareButton code={room.code} />
+          <p className="text-[12px] text-ink-soft">
+            Anyone with the link can join — no code typing.
+          </p>
+        </div>
 
         <RoomSettings
           room={optimisticRoom}
