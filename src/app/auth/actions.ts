@@ -37,6 +37,13 @@ export async function signUpAction(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const displayName = String(formData.get("displayName") ?? "").trim();
+  const nextRaw = String(formData.get("next") ?? "");
+  // After verification, route to the caller's intended destination if it's
+  // a safe local path; otherwise fall back to the welcome screen.
+  const safeNext =
+    nextRaw.startsWith("/") && !nextRaw.startsWith("//")
+      ? nextRaw
+      : "/auth/welcome";
 
   if (!email || !password || !displayName) {
     return { status: "error", message: "All fields are required." };
@@ -58,7 +65,7 @@ export async function signUpAction(
     password,
     options: {
       data: { display_name: displayName },
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/auth/welcome`,
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=${encodeURIComponent(safeNext)}`,
     },
   });
 

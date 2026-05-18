@@ -133,7 +133,7 @@ function FormBody({ mode, next }: { mode: Mode; next: string }) {
 
   return (
     <form action={formAction} noValidate>
-      {mode === "signin" && <input type="hidden" name="next" value={next} />}
+      <input type="hidden" name="next" value={next} />
 
       {mode === "signup" && (
         <div>
