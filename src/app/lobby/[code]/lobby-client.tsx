@@ -142,12 +142,18 @@ export function LobbyClient({
     players,
     playersReducer,
   );
+  const [optimisticRoom, addRoomOptimistic] = useOptimistic(
+    room,
+    (state: Room, patch: Partial<Room>): Room => ({ ...state, ...patch }),
+  );
   const [, startTransition] = useTransition();
 
-  const meIsHost = room.host_id === currentUserId;
-  const layoutTeams = teamsForLayout(room.team_layout);
-  const teamCapacity = Math.floor(room.target_players / layoutTeams.length);
-  const validLayouts = LAYOUT_OPTIONS[room.target_players] ?? null;
+  const meIsHost = optimisticRoom.host_id === currentUserId;
+  const layoutTeams = teamsForLayout(optimisticRoom.team_layout);
+  const teamCapacity = Math.floor(
+    optimisticRoom.target_players / layoutTeams.length,
+  );
+  const validLayouts = LAYOUT_OPTIONS[optimisticRoom.target_players] ?? null;
 
   // Sensors: small distance threshold on pointer (so clicking buttons doesn't
   // start a drag), longer delay on touch.
@@ -203,6 +209,7 @@ export function LobbyClient({
 
   const handleSetLayout = (layout: string) => {
     startTransition(async () => {
+      addRoomOptimistic({ team_layout: layout });
       await setTeamLayoutAction(fd({ roomId: room.id, layout }));
     });
   };
@@ -215,6 +222,7 @@ export function LobbyClient({
 
   const handleSetTurnSeconds = (seconds: number) => {
     startTransition(async () => {
+      addRoomOptimistic({ turn_seconds: seconds });
       await setTurnSecondsAction(
         fd({ roomId: room.id, seconds: String(seconds) }),
       );
@@ -223,6 +231,7 @@ export function LobbyClient({
 
   const handleSetTargetSequences = (n: number | null) => {
     startTransition(async () => {
+      addRoomOptimistic({ target_sequences: n });
       await setTargetSequencesAction(
         fd({ roomId: room.id, n: n === null ? "" : String(n) }),
       );
@@ -304,8 +313,8 @@ export function LobbyClient({
             style={{ boxShadow: "0 0 0 4px rgba(123,216,181,0.2)" }}
           />
           <span>
-            {optimisticPlayers.length} / {room.target_players} players ·{" "}
-            {room.team_layout}
+            {optimisticPlayers.length} / {optimisticRoom.target_players}{" "}
+            players · {optimisticRoom.team_layout}
           </span>
         </SoftPill>
 
@@ -326,7 +335,7 @@ export function LobbyClient({
         </p>
 
         <RoomSettings
-          room={room}
+          room={optimisticRoom}
           layoutTeams={layoutTeams}
           validLayouts={validLayouts}
           meIsHost={meIsHost}
@@ -469,7 +478,7 @@ function RoomSettings({
   const effectiveSeq = room.target_sequences ?? defaultSeq;
 
   return (
-    <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+    <div className="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-3">
       {validLayouts && (
         <SettingPicker
           label="Layout"
@@ -480,7 +489,7 @@ function RoomSettings({
         />
       )}
       <SettingPicker
-        label="Turn"
+        label="Turn timer"
         options={TURN_SECONDS_PRESETS.map((s) => ({
           label: `${s}s`,
           value: s,
@@ -491,7 +500,7 @@ function RoomSettings({
       />
       {showSeqPicker && (
         <SettingPicker
-          label="Win"
+          label="Win at"
           options={[
             { label: "1 seq", value: 1 },
             { label: "2 seqs", value: 2 },
@@ -519,11 +528,11 @@ function SettingPicker<T extends string | number>({
   disabled: boolean;
 }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-2xl border border-line bg-surface p-1 pl-2.5">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+    <div className="inline-flex items-center gap-2">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft">
         {label}
       </span>
-      <div className="inline-flex items-center gap-1">
+      <div className="inline-flex items-center gap-0.5 rounded-xl border border-line bg-surface p-0.5">
         {options.map((opt) => {
           const active = value === opt.value;
           if (disabled) {
@@ -531,7 +540,7 @@ function SettingPicker<T extends string | number>({
             return (
               <span
                 key={String(opt.value)}
-                className="rounded-xl bg-ink px-2.5 py-1 text-[12px] font-semibold text-canvas"
+                className="rounded-[10px] bg-ink px-2.5 py-1 text-[12px] font-semibold text-canvas"
               >
                 {opt.label}
               </span>
@@ -542,7 +551,7 @@ function SettingPicker<T extends string | number>({
               key={String(opt.value)}
               type="button"
               onClick={() => onChange(opt.value)}
-              className={`rounded-xl px-2.5 py-1 text-[12px] font-semibold transition-colors ${
+              className={`rounded-[10px] px-2.5 py-1 text-[12px] font-semibold transition-colors ${
                 active ? "bg-ink text-canvas" : "text-ink-soft hover:text-ink"
               }`}
             >
