@@ -125,7 +125,10 @@ export function GameClient({
   }
 
   function handleSelect(idx: number) {
-    if (!interactable) return;
+    // Allow selecting cards off-turn so the player can preview placement
+    // spots. Submission paths (handleCellClick / handleSwapDead) still
+    // gate on `interactable`, so the preview is read-only.
+    if (gameFinished || burningIdx != null) return;
     setError(null);
     setSelectedIdx((cur) => (cur === idx ? null : idx));
   }
@@ -173,6 +176,7 @@ export function GameClient({
             myTeam={me?.team ?? null}
             onCellClick={handleCellClick}
             lastMove={lastMove}
+            preview={!myTurn}
           />
         </div>
       </div>
@@ -191,7 +195,6 @@ export function GameClient({
           cards={hand}
           selectedIdx={selectedIdx}
           onSelect={handleSelect}
-          disabled={!myTurn}
           burningIdx={burningIdx}
         />
       </div>
@@ -243,6 +246,12 @@ export function GameClient({
                 </span>
               </>
             )}
+          </div>
+        ) : !myTurn && selectedCard ? (
+          <div className="text-center text-[11px] text-ink-soft">
+            Previewing{" "}
+            <span className="font-mono font-bold text-ink">{selectedCard}</span>{" "}
+            · wait for your turn to play.
           </div>
         ) : null}
       </div>

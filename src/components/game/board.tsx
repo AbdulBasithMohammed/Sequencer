@@ -28,6 +28,7 @@ export function Board({
   myTeam,
   onCellClick,
   lastMove,
+  preview = false,
 }: {
   state: BoardState;
   selectedCard?: string | null;
@@ -35,6 +36,10 @@ export function Board({
   myTeam?: number | null;
   onCellClick?: (row: number, col: number) => void;
   lastMove?: { row: number; col: number; action: "place" | "remove" } | null;
+  // True when the viewer is browsing a card off-turn: highlights still
+  // show where the card *could* go, but in a muted ink color and the
+  // cells aren't clickable.
+  preview?: boolean;
 }) {
   return (
     <div
@@ -75,8 +80,11 @@ export function Board({
               isMatch={isMatch}
               isLast={isLast}
               lastAction={isLast ? lastMove.action : null}
+              preview={preview}
               onClick={
-                isMatch && onCellClick ? () => onCellClick(r, c) : undefined
+                isMatch && !preview && onCellClick
+                  ? () => onCellClick(r, c)
+                  : undefined
               }
             />
           );
@@ -94,6 +102,7 @@ function Cell({
   isMatch,
   isLast,
   lastAction,
+  preview,
   onClick,
 }: {
   card: BoardCard;
@@ -103,6 +112,7 @@ function Cell({
   isMatch: boolean;
   isLast: boolean;
   lastAction: "place" | "remove" | null;
+  preview: boolean;
   onClick?: () => void;
 }) {
   const wild = card === null;
@@ -113,23 +123,39 @@ function Cell({
   const showLast = isLast && !isMatch;
   const lastOutline = "rgba(255, 210, 63, 0.95)";
   const lastGlow = "rgba(255, 210, 63, 0.7)";
+  // Off-turn preview: still show *where* the selected card could go, but
+  // with a muted ink halo so it doesn't read as a callable action.
+  const isPreviewMatch = isMatch && preview;
+  const isLiveMatch = isMatch && !preview;
+  const previewOutline = "rgba(27, 21, 48, 0.55)";
+  const previewGlow = "rgba(27, 21, 48, 0.18)";
   return (
     <div
-      className={`relative rounded-[6px] ${onClick ? "cursor-pointer" : ""} ${isMatch ? "animate-[pulse_1.4s_ease-in-out_infinite]" : ""}`}
+      className={`relative rounded-[6px] ${onClick ? "cursor-pointer" : ""} ${isLiveMatch ? "animate-[pulse_1.4s_ease-in-out_infinite]" : ""}`}
       style={{
         aspectRatio: CELL_ASPECT,
-        outline: isMatch
+        outline: isLiveMatch
           ? "2px solid var(--color-pink)"
-          : showLast
-            ? `1.5px solid ${lastOutline}`
-            : undefined,
-        outlineOffset: isMatch ? 1 : showLast ? 0 : undefined,
-        boxShadow: isMatch
+          : isPreviewMatch
+            ? `1.5px dashed ${previewOutline}`
+            : showLast
+              ? `1.5px solid ${lastOutline}`
+              : undefined,
+        outlineOffset: isLiveMatch
+          ? 1
+          : isPreviewMatch
+            ? 1
+            : showLast
+              ? 0
+              : undefined,
+        boxShadow: isLiveMatch
           ? "0 0 14px rgba(255,92,138,0.55)"
-          : showLast
-            ? `0 0 12px ${lastGlow}`
-            : undefined,
-        zIndex: isMatch ? 5 : showLast ? 3 : undefined,
+          : isPreviewMatch
+            ? `0 0 10px ${previewGlow}`
+            : showLast
+              ? `0 0 12px ${lastGlow}`
+              : undefined,
+        zIndex: isLiveMatch ? 5 : isPreviewMatch ? 4 : showLast ? 3 : undefined,
       }}
       onClick={onClick}
     >
