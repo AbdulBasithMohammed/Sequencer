@@ -360,10 +360,9 @@ export function LobbyClient({
         onDragEnd={handleDragEnd}
       >
         <div
-          className="mt-8 grid gap-3"
-          style={{
-            gridTemplateColumns: `repeat(${layoutTeams.length}, minmax(0, 1fr))`,
-          }}
+          className={`mt-8 grid gap-3 grid-cols-1 ${
+            layoutTeams.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"
+          }`}
         >
           {layoutTeams.map((team) => (
             <TeamZone
