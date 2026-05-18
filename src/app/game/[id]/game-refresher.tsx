@@ -3,10 +3,14 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { revalidateGameAction } from "./actions";
 
-async function flushAndRefresh(router: ReturnType<typeof useRouter>) {
-  await revalidateGameAction();
+// Supabase server-side queries on this page don't flow through Next's
+// fetch cache, so a pre-emptive revalidatePath() roundtrip is wasted —
+// router.refresh() alone re-executes the server component freshly.
+// Skipping the extra server action call shaves a full roundtrip per
+// realtime update, which is a meaningful win for players far from the
+// Supabase region.
+function flushAndRefresh(router: ReturnType<typeof useRouter>) {
   router.refresh();
 }
 

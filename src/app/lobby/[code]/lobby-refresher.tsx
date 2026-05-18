@@ -3,10 +3,12 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { revalidateLobbyAction } from "./actions";
 
-async function flushAndRefresh(router: ReturnType<typeof useRouter>) {
-  await revalidateLobbyAction();
+// Lobby's supabase queries don't flow through Next's fetch cache, so a
+// pre-emptive revalidatePath() roundtrip is wasted — router.refresh()
+// alone re-executes the server component freshly. Skipping the extra
+// server action call shaves a full roundtrip per realtime update.
+function flushAndRefresh(router: ReturnType<typeof useRouter>) {
   router.refresh();
 }
 
