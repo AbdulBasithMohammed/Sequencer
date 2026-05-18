@@ -8,7 +8,6 @@ export const dynamic = "force-dynamic";
 
 type RoomLookup = {
   status: string;
-  team_layout: string;
   target_players: number;
   is_full: boolean;
   is_banned: boolean;
@@ -16,39 +15,16 @@ type RoomLookup = {
 
 async function lookupRoom(code: string): Promise<RoomLookup> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: room } = await supabase
-    .from("rooms")
-    .select("id, status, team_layout, target_players")
-    .eq("code", code)
-    .maybeSingle();
-  if (!room) return null;
-
-  const { count } = await supabase
-    .from("room_players")
-    .select("user_id", { head: true, count: "exact" })
-    .eq("room_id", room.id);
-
-  let isBanned = false;
-  if (user) {
-    const { data: ban } = await supabase
-      .from("room_bans")
-      .select("user_id")
-      .eq("room_id", room.id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-    isBanned = !!ban;
-  }
-
+  // room_join_info is SECURITY DEFINER so it works for anon callers too;
+  // the table itself is RLS-locked to members.
+  const { data } = await supabase.rpc("room_join_info", { p_code: code });
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || !row.exists_) return null;
   return {
-    status: room.status,
-    team_layout: room.team_layout,
-    target_players: room.target_players,
-    is_full: (count ?? 0) >= room.target_players,
-    is_banned: isBanned,
+    status: row.status,
+    target_players: row.target_players,
+    is_full: row.is_full,
+    is_banned: row.is_banned,
   };
 }
 
