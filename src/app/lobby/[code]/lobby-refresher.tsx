@@ -15,14 +15,19 @@ function flushAndRefresh(router: ReturnType<typeof useRouter>) {
 /**
  * Renderless. Subscribes to the `lobby:<roomId>` Broadcast channel —
  * populated by Postgres triggers that fire on every change to rooms,
- * room_players, room_bans. Lighter and faster than postgres_changes (no
- * per-row RLS dispatch), fixes mobile delivery lag.
+ * room_players, room_bans, and games. Lighter and faster than
+ * postgres_changes (no per-row RLS dispatch), fixes mobile delivery lag.
  *
- * Kept on postgres_changes (because they need event-specific payload
+ * Events on lobby:<roomId>:
+ *   - "update":       rooms/room_players/room_bans mutation, payload {version}
+ *   - "game_started": games INSERT, payload {game_id} — used to navigate
+ *                     the non-host straight to /game/<id> without waiting
+ *                     for a slow postgres_changes event.
+ *
+ * Kept on postgres_changes (because it needs event-specific payload
  * the broadcast doesn't carry):
  *   - DELETE on room_players: detect when *I* was the deleted row so we
  *     can show kicked/banned redirect with the right query param
- *   - INSERT on games: redirect to /game/<id> when the host starts
  *
  * Defence in depth:
  *   - subscribe-and-reconcile on SUBSCRIBED status
@@ -60,6 +65,11 @@ export function LobbyRefresher({
         }
         flushAndRefresh(router);
       })
+      .on("broadcast", { event: "game_started" }, (msg) => {
+        const gameId = (msg.payload as { game_id?: string } | undefined)
+          ?.game_id;
+        if (gameId) router.push(`/game/${gameId}`);
+      })
       .on(
         "postgres_changes",
         {
@@ -93,19 +103,6 @@ export function LobbyRefresher({
             return;
           }
           flushAndRefresh(router);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "games",
-          filter: `room_id=eq.${roomId}`,
-        },
-        (payload) => {
-          const gameId = (payload.new as { id?: string } | null)?.id;
-          if (gameId) router.push(`/game/${gameId}`);
         },
       )
       .subscribe((status) => {
