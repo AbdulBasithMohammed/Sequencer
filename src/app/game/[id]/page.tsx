@@ -59,7 +59,7 @@ export default async function GamePage({
     await Promise.all([
       supabase
         .from("room_players")
-        .select("user_id, seat_index, team, profiles(display_name)")
+        .select("user_id, seat_index, team, profiles(display_name, is_bot)")
         .eq("room_id", g.room_id)
         .order("seat_index"),
       supabase.rpc("get_my_hand", { p_game_id: g.id }),
@@ -93,8 +93,8 @@ export default async function GamePage({
     seat_index: number;
     team: number | null;
     profiles:
-      | { display_name: string | null }
-      | { display_name: string | null }[]
+      | { display_name: string | null; is_bot: boolean }
+      | { display_name: string | null; is_bot: boolean }[]
       | null;
   };
   const players: RosterPlayer[] = (rpRows ?? []).map((r: RpRow) => {
@@ -105,6 +105,7 @@ export default async function GamePage({
       team: r.team,
       display_name: prof?.display_name ?? null,
       is_me: r.user_id === user.id,
+      is_bot: prof?.is_bot ?? false,
     };
   });
 

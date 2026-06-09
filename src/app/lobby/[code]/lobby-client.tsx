@@ -17,8 +17,11 @@ import { LobbyRefresher } from "./lobby-refresher";
 import { LeaveButton } from "./leave-button";
 import { ShareButton } from "./share-button";
 import {
+  addBotAction,
   banPlayerAction,
   kickPlayerAction,
+  removeBotAction,
+  setBotDifficultyAction,
   setReadyAction,
   setTargetSequencesAction,
   setTeamAction,
@@ -42,6 +45,8 @@ export type Player = {
   joined_at: string;
   token_color: TokenColor;
   display_name: string | null;
+  is_bot: boolean;
+  bot_difficulty: string | null;
 };
 
 export type Ban = {
@@ -75,6 +80,12 @@ const LAYOUT_OPTIONS: Record<number, string[]> = {
 
 const TURN_SECONDS_PRESETS = [30, 45, 60, 90, 120];
 
+const BOT_DIFFICULTIES: { value: string; label: string }[] = [
+  { value: "rookie", label: "Rookie" },
+  { value: "medium", label: "Medium" },
+  { value: "ace", label: "Ace" },
+];
+
 function teamsForLayout(layout: string): number[] {
   switch (layout) {
     case "1v1v1":
@@ -93,6 +104,7 @@ type OptimisticAction =
   | { type: "swap_teams"; userA: string; userB: string }
   | { type: "set_ready"; userId: string; ready: boolean }
   | { type: "set_token_color"; userId: string; color: TokenColor }
+  | { type: "set_bot_difficulty"; userId: string; difficulty: string }
   | { type: "remove"; userId: string };
 
 function playersReducer(state: Player[], action: OptimisticAction): Player[] {
@@ -119,6 +131,12 @@ function playersReducer(state: Player[], action: OptimisticAction): Player[] {
       return state.map((p) =>
         p.user_id === action.userId
           ? { ...p, token_color: action.color }
+          : p,
+      );
+    case "set_bot_difficulty":
+      return state.map((p) =>
+        p.user_id === action.userId
+          ? { ...p, bot_difficulty: action.difficulty }
           : p,
       );
     case "remove":
@@ -192,6 +210,32 @@ export function LobbyClient({
     startTransition(async () => {
       addOptimistic({ type: "remove", userId });
       await kickPlayerAction(fd({ roomId: room.id, userId }));
+    });
+  };
+
+  const handleAddBot = () => {
+    startTransition(async () => {
+      await addBotAction(fd({ roomId: room.id, difficulty: "medium" }));
+    });
+  };
+
+  const handleRemoveBot = (seat: number, userId: string) => {
+    startTransition(async () => {
+      addOptimistic({ type: "remove", userId });
+      await removeBotAction(fd({ roomId: room.id, seat: String(seat) }));
+    });
+  };
+
+  const handleSetBotDifficulty = (
+    seat: number,
+    userId: string,
+    difficulty: string,
+  ) => {
+    startTransition(async () => {
+      addOptimistic({ type: "set_bot_difficulty", userId, difficulty });
+      await setBotDifficultyAction(
+        fd({ roomId: room.id, seat: String(seat), difficulty }),
+      );
     });
   };
 
@@ -296,6 +340,7 @@ export function LobbyClient({
     nonHostReadyCount === nonHostPlayers.length &&
     everyTeamHasAPlayer &&
     noTeamOverCapacity;
+  const roomIsFull = optimisticPlayers.length >= optimisticRoom.target_players;
 
   return (
     <>
@@ -378,6 +423,8 @@ export function LobbyClient({
               onKick={handleKick}
               onBan={handleBan}
               onTransferHost={handleTransferHost}
+              onRemoveBot={handleRemoveBot}
+              onSetBotDifficulty={handleSetBotDifficulty}
             />
           ))}
         </div>
@@ -420,6 +467,14 @@ export function LobbyClient({
 
         {meIsHost ? (
           <div className="flex items-center gap-3">
+            <SoftButton
+              type="button"
+              variant="outline"
+              onClick={handleAddBot}
+              disabled={roomIsFull}
+            >
+              <span aria-hidden>+</span> Add bot
+            </SoftButton>
             <span className="text-[13px] text-ink-soft">
               {nonHostPlayers.length === 0
                 ? "Waiting for players…"
@@ -576,6 +631,8 @@ function TeamZone({
   onKick,
   onBan,
   onTransferHost,
+  onRemoveBot,
+  onSetBotDifficulty,
 }: {
   team: number;
   players: Player[];
@@ -586,6 +643,8 @@ function TeamZone({
   onKick: (userId: string) => void;
   onBan: (userId: string) => void;
   onTransferHost: (userId: string) => void;
+  onRemoveBot: (seat: number, userId: string) => void;
+  onSetBotDifficulty: (seat: number, userId: string, difficulty: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `team-${team}` });
 
@@ -619,6 +678,8 @@ function TeamZone({
           onKick={onKick}
           onBan={onBan}
           onTransferHost={onTransferHost}
+          onRemoveBot={onRemoveBot}
+          onSetBotDifficulty={onSetBotDifficulty}
         />
       ))}
 
@@ -642,6 +703,8 @@ function DraggablePlayerCard({
   onKick,
   onBan,
   onTransferHost,
+  onRemoveBot,
+  onSetBotDifficulty,
 }: {
   player: Player;
   isHost: boolean;
@@ -650,6 +713,8 @@ function DraggablePlayerCard({
   onKick: (userId: string) => void;
   onBan: (userId: string) => void;
   onTransferHost: (userId: string) => void;
+  onRemoveBot: (seat: number, userId: string) => void;
+  onSetBotDifficulty: (seat: number, userId: string, difficulty: string) => void;
 }) {
   const {
     attributes,
@@ -723,6 +788,11 @@ function DraggablePlayerCard({
                 Host
               </span>
             )}
+            {player.is_bot && (
+              <span className="shrink-0 rounded-full bg-ink-soft px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-canvas">
+                Bot
+              </span>
+            )}
             {isYou && (
               <span className="shrink-0 rounded-full bg-ink px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-canvas">
                 You
@@ -743,7 +813,44 @@ function DraggablePlayerCard({
         className="mt-2 flex min-h-[26px] flex-wrap gap-1.5 pl-11"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {meIsHost && !isYou && (
+        {meIsHost && !isYou && player.is_bot && (
+          <>
+            <div className="inline-flex items-center gap-0.5 rounded-full border border-line bg-canvas p-0.5">
+              {BOT_DIFFICULTIES.map((d) => {
+                const active =
+                  (player.bot_difficulty ?? "medium") === d.value;
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    onClick={() =>
+                      onSetBotDifficulty(
+                        player.seat_index,
+                        player.user_id,
+                        d.value,
+                      )
+                    }
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors ${
+                      active
+                        ? "bg-ink text-canvas"
+                        : "text-ink-soft hover:text-ink"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => onRemoveBot(player.seat_index, player.user_id)}
+              className="rounded-full border border-pink/40 bg-canvas px-2.5 py-1 text-[10px] font-semibold text-pink hover:bg-pink/10"
+            >
+              Remove
+            </button>
+          </>
+        )}
+        {meIsHost && !isYou && !player.is_bot && (
           <>
             <button
               type="button"

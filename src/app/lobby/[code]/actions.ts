@@ -185,3 +185,45 @@ export async function setTokenColorAction(formData: FormData) {
   });
   revalidateLobby();
 }
+
+export async function addBotAction(formData: FormData) {
+  const roomId = String(formData.get("roomId") ?? "");
+  const difficulty = String(formData.get("difficulty") ?? "medium");
+  if (!roomId || !["rookie", "medium", "ace"].includes(difficulty)) return;
+
+  const supabase = await createClient();
+  await supabase.rpc("add_bot", {
+    p_room_id: roomId,
+    p_difficulty: difficulty,
+  });
+  revalidateLobby();
+}
+
+export async function removeBotAction(formData: FormData) {
+  const roomId = String(formData.get("roomId") ?? "");
+  const seat = Number(formData.get("seat"));
+  if (!roomId || !Number.isInteger(seat)) return;
+
+  const supabase = await createClient();
+  await supabase.rpc("remove_bot", {
+    p_room_id: roomId,
+    p_seat: seat,
+  });
+  revalidateLobby();
+}
+
+export async function setBotDifficultyAction(formData: FormData) {
+  const roomId = String(formData.get("roomId") ?? "");
+  const seat = Number(formData.get("seat"));
+  const difficulty = String(formData.get("difficulty") ?? "");
+  if (!roomId || !Number.isInteger(seat)) return;
+  if (!["rookie", "medium", "ace"].includes(difficulty)) return;
+
+  const supabase = await createClient();
+  await supabase.rpc("set_bot_difficulty", {
+    p_room_id: roomId,
+    p_seat: seat,
+    p_difficulty: difficulty,
+  });
+  revalidateLobby();
+}

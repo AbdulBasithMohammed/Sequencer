@@ -57,7 +57,8 @@ export default async function LobbyPage({
     ready: boolean;
     joined_at: string;
     token_color: TokenColor;
-    profiles: { display_name: string } | null;
+    bot_difficulty: string | null;
+    profiles: { display_name: string; is_bot: boolean } | null;
   };
   type BanRow = {
     user_id: string;
@@ -68,7 +69,7 @@ export default async function LobbyPage({
     supabase
       .from("room_players")
       .select(
-        "seat_index, user_id, team, ready, joined_at, token_color, profiles(display_name)",
+        "seat_index, user_id, team, ready, joined_at, token_color, bot_difficulty, profiles(display_name, is_bot)",
       )
       .eq("room_id", room.id)
       .order("seat_index"),
@@ -91,6 +92,8 @@ export default async function LobbyPage({
     joined_at: p.joined_at,
     token_color: p.token_color,
     display_name: p.profiles?.display_name ?? null,
+    is_bot: p.profiles?.is_bot ?? false,
+    bot_difficulty: p.bot_difficulty ?? null,
   }));
 
   const bans: Ban[] = ((bansResult.data as BanRow[] | null) ?? []).map(

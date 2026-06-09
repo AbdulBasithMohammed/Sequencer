@@ -21,6 +21,7 @@ export type RosterPlayer = {
   team: number | null;
   display_name: string | null;
   is_me: boolean;
+  is_bot: boolean;
 };
 
 export function TurnBanner({
@@ -82,6 +83,17 @@ export function TurnBanner({
                 {p.display_name ?? `Seat ${p.seat_index}`}
                 {p.is_me ? " (you)" : ""}
               </span>
+              {p.is_bot ? (
+                <span
+                  className="rounded-full px-1 py-px text-[8px] font-bold uppercase tracking-wider"
+                  style={{
+                    background: "var(--color-ink-soft)",
+                    color: "var(--color-canvas)",
+                  }}
+                >
+                  Bot
+                </span>
+              ) : null}
             </div>
           );
         })}
