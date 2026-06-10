@@ -75,8 +75,23 @@ export function GameClient({
   const gameRef = useRef(game);
   const handFetchSeq = useRef(0);
   const reconcileInFlight = useRef(false);
-  const lastHandSigRef = useRef<string>(initialSnapshot.hand.join(","));
   const lastTurnSeatRef = useRef<number | null>(initialSnapshot.live.turnSeat);
+
+  // The card-burn animation must play out even though the broadcast (and
+  // with it the refreshed hand) lands much faster than 540ms. Any hand
+  // update that arrives mid-burn is parked here and flushed by
+  // finishBurn(), so the burning card isn't yanked out from under the
+  // animation.
+  const burningRef = useRef(false);
+  const pendingHandRef = useRef<string[] | null>(null);
+
+  const setHandDeferred = useCallback((next: string[]) => {
+    if (burningRef.current) {
+      pendingHandRef.current = next;
+    } else {
+      setHand(next);
+    }
+  }, []);
 
   const me = players.find((p) => p.is_me) ?? null;
   const mySeat = me?.seat_index ?? null;
@@ -106,8 +121,8 @@ export function GameClient({
     const seq = ++handFetchSeq.current;
     const { data } = await supabase.rpc("get_my_hand", { p_game_id: gameId });
     if (seq !== handFetchSeq.current) return; // a newer fetch superseded us
-    if (Array.isArray(data)) setHand(data as string[]);
-  }, [supabase, gameId]);
+    if (Array.isArray(data)) setHandDeferred(data as string[]);
+  }, [supabase, gameId, setHandDeferred]);
 
   // Full resync straight from Supabase (one hop) — game, roster, hand,
   // last move. Used by every self-heal path.
@@ -126,12 +141,12 @@ export function GameClient({
         setPlayers(snap.players);
         setLastMove(snap.lastMove);
         handFetchSeq.current++;
-        setHand(snap.hand);
+        setHandDeferred(snap.hand);
       }
     } finally {
       reconcileInFlight.current = false;
     }
-  }, [supabase, gameId, myUserId]);
+  }, [supabase, gameId, myUserId, setHandDeferred]);
 
   // Broadcast subscription — the hot path of every turn. `reconcile` and
   // `refetchHand` are stable callbacks (their deps are fixed for a mounted
@@ -211,14 +226,6 @@ export function GameClient({
     return () => window.clearTimeout(timer);
   }, [game.status, game.turnDeadline, game.version, reconcile]);
 
-  useEffect(() => {
-    const sig = hand.join(",");
-    if (sig !== lastHandSigRef.current) {
-      lastHandSigRef.current = sig;
-      setBurningIdx(null);
-    }
-  }, [hand]);
-
   // Subtle audio cue on any turn change. Skipped on initial mount
   // (ref starts equal to the prop) and when muted.
   useEffect(() => {
@@ -247,6 +254,25 @@ export function GameClient({
       return;
     }
     setError(rpcError.message);
+  }
+
+  // Burn lifecycle. The animation gets its full duration even though the
+  // confirming broadcast lands much sooner; hand updates queued during the
+  // burn are flushed at the end so the drawn card appears exactly when the
+  // played card finishes burning out.
+  function beginBurn(idx: number) {
+    burningRef.current = true;
+    setBurningIdx(idx);
+    return new Promise<void>((r) => window.setTimeout(r, 540));
+  }
+
+  function finishBurn() {
+    burningRef.current = false;
+    setBurningIdx(null);
+    if (pendingHandRef.current) {
+      setHand(pendingHandRef.current);
+      pendingHandRef.current = null;
+    }
   }
 
   // Optimistic board mutation: the chip lands the instant you tap; the
@@ -299,7 +325,7 @@ export function GameClient({
         : me?.team != null
           ? applyOptimisticCell(row, col, me.team, "place")
           : null;
-    setBurningIdx(idxBeingPlayed);
+    const burnDone = beginBurn(idxBeingPlayed);
     setSelectedIdx(null);
     const { data: newVersion, error: rpcError } = await supabase.rpc(rpcName, {
       p_game_id: gameId,
@@ -310,12 +336,13 @@ export function GameClient({
     });
     if (rpcError) {
       rollback?.();
-      setBurningIdx(null);
+      finishBurn();
       handleRpcError(rpcError);
       return;
     }
     awaitOwnBroadcast(newVersion);
-    await new Promise((r) => window.setTimeout(r, 540));
+    await burnDone;
+    finishBurn();
     setSubmitting(false);
   }
 
@@ -327,6 +354,8 @@ export function GameClient({
     }
     setError(null);
     setSubmitting(true);
+    const burnDone = beginBurn(idx);
+    if (selectedIdx === idx) setSelectedIdx(null);
     const { data: newVersion, error: rpcError } = await supabase.rpc(
       "swap_dead_card",
       {
@@ -336,13 +365,13 @@ export function GameClient({
       },
     );
     if (rpcError) {
+      finishBurn();
       handleRpcError(rpcError);
       return;
     }
-    setBurningIdx(idx);
-    if (selectedIdx === idx) setSelectedIdx(null);
     awaitOwnBroadcast(newVersion);
-    await new Promise((r) => window.setTimeout(r, 540));
+    await burnDone;
+    finishBurn();
     setSubmitting(false);
   }
 
