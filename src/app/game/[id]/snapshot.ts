@@ -36,6 +36,7 @@ type RawGameFields = {
 
 export type GameSnapshot = {
   live: LiveGame;
+  roomId: string | null;
   roomCode: string | null;
   players: RosterPlayer[];
   hand: string[];
@@ -61,6 +62,7 @@ export function parseSnapshot(
 ): GameSnapshot | null {
   if (!data || typeof data !== "object") return null;
   const raw = data as RawGameFields & {
+    room_id: string | null;
     room_code: string | null;
     players: {
       user_id: string;
@@ -76,6 +78,7 @@ export function parseSnapshot(
 
   return {
     live: liveGameFromRaw(raw),
+    roomId: raw.room_id ?? null,
     roomCode: raw.room_code ?? null,
     players: (raw.players ?? []).map((p) => ({
       user_id: p.user_id,

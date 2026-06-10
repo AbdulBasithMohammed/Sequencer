@@ -10,6 +10,10 @@ import { classifyCard, isDeadCard } from "@/lib/board-layout";
 import { playTurnBlip } from "@/lib/sound/turn-blip";
 import { isMuted } from "@/components/game/mute-toggle";
 import {
+  ConnectionPill,
+  useBrowserOnline,
+} from "@/components/ui/connection-pill";
+import {
   diffBoards,
   liveGameFromRaw,
   parseSnapshot,
@@ -63,6 +67,8 @@ export function GameClient({
   const [burningIdx, setBurningIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [channelDown, setChannelDown] = useState(false);
+  const online = useBrowserOnline();
 
   // Callbacks (broadcast handler, timers) need the freshest state without
   // resubscribing the channel on every turn.
@@ -159,7 +165,17 @@ export function GameClient({
         if (gap) reconcile();
       })
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") reconcile();
+        if (status === "SUBSCRIBED") {
+          setChannelDown(false);
+          reconcile();
+        } else if (
+          status === "CHANNEL_ERROR" ||
+          status === "TIMED_OUT" ||
+          status === "CLOSED"
+        ) {
+          // supabase-js rejoins with backoff; we just make the gap visible.
+          setChannelDown(true);
+        }
       });
 
     const onVisible = () => {
@@ -174,6 +190,12 @@ export function GameClient({
       window.removeEventListener("focus", onVisible);
     };
   }, [supabase, gameId, applyLive, reconcile, refetchHand]);
+
+  // Coming back online: the channel will rejoin on its own, but the state
+  // may have moved while we were dark — resync immediately.
+  useEffect(() => {
+    if (online) reconcile();
+  }, [online, reconcile]);
 
   // Freeze-proof backstop: the server always advances an expired turn (cron
   // tick), so a deadline that passes silently means we missed a broadcast.
@@ -227,6 +249,34 @@ export function GameClient({
     setError(rpcError.message);
   }
 
+  // Optimistic board mutation: the chip lands the instant you tap; the
+  // broadcast (a strictly newer version) confirms it moments later. The
+  // returned restore function rolls back if the server rejects — but only
+  // while no newer authoritative state has arrived in the meantime.
+  function applyOptimisticCell(
+    row: number,
+    col: number,
+    team: number | null,
+    action: "place" | "remove",
+  ) {
+    const prev = gameRef.current;
+    const prevLastMove = lastMove;
+    const board = prev.board.map((r) => r.slice());
+    const cell = board[row]?.[col] ?? { team: null, sequence_ids: [] };
+    board[row][col] = { team, sequence_ids: cell.sequence_ids ?? [] };
+    const next = { ...prev, board };
+    gameRef.current = next;
+    setGame(next);
+    setLastMove({ row, col, action });
+    return () => {
+      if (gameRef.current.version === prev.version) {
+        gameRef.current = prev;
+        setGame(prev);
+        setLastMove(prevLastMove);
+      }
+    };
+  }
+
   async function handleCellClick(row: number, col: number) {
     if (!interactable || selectedCard == null || selectedIdx == null) return;
     if (selectedIsDead) {
@@ -242,19 +292,28 @@ export function GameClient({
         : selectedKind === "one_eyed_jack"
           ? "play_remove"
           : "play_move";
+    const clientVersion = gameRef.current.version;
+    const rollback =
+      rpcName === "play_remove"
+        ? applyOptimisticCell(row, col, null, "remove")
+        : me?.team != null
+          ? applyOptimisticCell(row, col, me.team, "place")
+          : null;
+    setBurningIdx(idxBeingPlayed);
+    setSelectedIdx(null);
     const { data: newVersion, error: rpcError } = await supabase.rpc(rpcName, {
       p_game_id: gameId,
-      p_client_version: gameRef.current.version,
+      p_client_version: clientVersion,
       p_card: selectedCard,
       p_row: row,
       p_col: col,
     });
     if (rpcError) {
+      rollback?.();
+      setBurningIdx(null);
       handleRpcError(rpcError);
       return;
     }
-    setBurningIdx(idxBeingPlayed);
-    setSelectedIdx(null);
     awaitOwnBroadcast(newVersion);
     await new Promise((r) => window.setTimeout(r, 540));
     setSubmitting(false);
@@ -308,6 +367,7 @@ export function GameClient({
 
   return (
     <>
+      <ConnectionPill show={channelDown || !online} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
@@ -330,6 +390,7 @@ export function GameClient({
           <WinScreen
             winnerTeam={game.winnerTeam}
             players={players}
+            roomId={initialSnapshot.roomId}
             roomCode={initialSnapshot.roomCode}
           />
         </div>

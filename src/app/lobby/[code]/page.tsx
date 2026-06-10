@@ -4,12 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 import {
-  LobbyClient,
   type Ban,
   type Player,
   type Room,
   type TokenColor,
 } from "./lobby-client";
+import { LobbyLive } from "./lobby-live";
 import { InviteFriendsPanel } from "./invite-friends-panel";
 
 export const metadata = {
@@ -135,9 +135,10 @@ export default async function LobbyPage({
         </Link>
       </header>
 
-      <LobbyClient
-        room={roomData}
-        players={players}
+      <LobbyLive
+        initialVersion={room.version ?? 0}
+        initialRoom={roomData}
+        initialPlayers={players}
         bans={bans}
         currentUserId={user.id}
       />

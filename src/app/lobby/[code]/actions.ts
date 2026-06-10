@@ -11,13 +11,6 @@ function revalidateLobby() {
   revalidatePath("/lobby/[code]", "page");
 }
 
-// Exposed so the client-side realtime handler can flush the page-level
-// data cache before router.refresh() — otherwise router.refresh() can
-// re-render against stale Supabase data.
-export async function revalidateLobbyAction() {
-  revalidatePath("/lobby/[code]", "page");
-}
-
 export async function leaveRoomAction(formData: FormData) {
   const roomId = String(formData.get("roomId") ?? "");
   if (!roomId) redirect("/play");

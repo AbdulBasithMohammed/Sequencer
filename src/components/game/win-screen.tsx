@@ -1,7 +1,10 @@
 "use client";
 
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { SoftLinkButton } from "@/components/ui/button";
 import { type RosterPlayer } from "@/components/game/turn-banner";
+import { setReadyAction } from "@/app/lobby/[code]/actions";
 
 const TEAM_COLOR: Record<number, string> = {
   1: "var(--color-pink)",
@@ -18,12 +21,32 @@ const TEAM_LABEL: Record<number, string> = {
 export function WinScreen({
   winnerTeam,
   players,
+  roomId,
   roomCode,
 }: {
   winnerTeam: number | null;
   players: RosterPlayer[];
+  roomId: string | null;
   roomCode: string | null;
 }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [readied, setReadied] = useState(false);
+
+  // One tap: mark yourself ready for the next round and head back to the
+  // lobby. Bots stay ready on their own; the host starts when everyone's in.
+  function handleRematch() {
+    if (!roomId || !roomCode) return;
+    startTransition(async () => {
+      const f = new FormData();
+      f.set("roomId", roomId);
+      f.set("ready", "true");
+      await setReadyAction(f);
+      setReadied(true);
+      router.push(`/lobby/${roomCode}`);
+    });
+  }
+
   const me = players.find((p) => p.is_me) ?? null;
   const myTeam = me?.team ?? null;
   const noWinner = winnerTeam == null;
@@ -102,9 +125,25 @@ export function WinScreen({
       ) : null}
 
       {roomCode ? (
-        <SoftLinkButton href={`/lobby/${roomCode}`} variant="primary" size="sm">
-          Back to lobby
-        </SoftLinkButton>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {roomId ? (
+            <button
+              type="button"
+              onClick={handleRematch}
+              disabled={pending || readied}
+              className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-canvas shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {pending || readied ? "Readying up…" : "Rematch"}
+            </button>
+          ) : null}
+          <SoftLinkButton
+            href={`/lobby/${roomCode}`}
+            variant="outline"
+            size="sm"
+          >
+            Back to lobby
+          </SoftLinkButton>
+        </div>
       ) : (
         <SoftLinkButton href="/play" variant="primary" size="sm">
           Back to play
@@ -112,7 +151,7 @@ export function WinScreen({
       )}
 
       <div className="text-[10px] uppercase tracking-[0.15em] text-ink-soft">
-        Everyone re-readies in the lobby before the host can restart.
+        Rematch readies you up — the host starts when everyone&apos;s in.
       </div>
     </div>
   );

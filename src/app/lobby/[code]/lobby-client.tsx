@@ -13,7 +13,6 @@ import {
 } from "@dnd-kit/core";
 import { SoftButton } from "@/components/ui/button";
 import { SoftPill } from "@/components/ui/pill";
-import { LobbyRefresher } from "./lobby-refresher";
 import { LeaveButton } from "./leave-button";
 import { ShareButton } from "./share-button";
 import {
@@ -344,12 +343,6 @@ export function LobbyClient({
 
   return (
     <>
-      <LobbyRefresher
-        roomId={room.id}
-        roomCode={room.code}
-        userId={currentUserId}
-      />
-
       {/* Room code hero */}
       <div className="flex flex-col items-center text-center">
         <SoftPill>
