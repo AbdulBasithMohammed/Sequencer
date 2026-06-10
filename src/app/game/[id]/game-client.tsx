@@ -437,29 +437,38 @@ export function GameClient({
         </div>
       )}
       <div
-        className="relative mx-auto"
-        style={{
-          aspectRatio: "70 / 50",
-          width: "min(96vw, calc((100dvh - 280px) * 70 / 50), 1100px)",
-        }}
+        // The board is up to 96vw wide — wider than the page's padded
+        // column on phones. Break out of the padding so mx-auto centers
+        // it on the viewport like every other centered block (turn
+        // banner, win card); inside the padded column it overflowed
+        // right and sat visibly off-center.
+        className="-mx-6 lg:-mx-10"
       >
         <div
-          className="absolute top-1/2 left-1/2"
+          className="relative mx-auto"
           style={{
-            width: "calc(100% * 5 / 7)",
-            aspectRatio: "5 / 7",
-            transform: "translate(-50%, -50%) rotate(90deg)",
+            aspectRatio: "70 / 50",
+            width: "min(96vw, calc((100dvh - 280px) * 70 / 50), 1100px)",
           }}
         >
-          <Board
-            state={game.board}
-            selectedCard={selectedCard}
-            selectedKind={selectedKind}
-            myTeam={me?.team ?? null}
-            onCellClick={handleCellClick}
-            lastMove={lastMove}
-            preview={!myTurn}
-          />
+          <div
+            className="absolute top-1/2 left-1/2"
+            style={{
+              width: "calc(100% * 5 / 7)",
+              aspectRatio: "5 / 7",
+              transform: "translate(-50%, -50%) rotate(90deg)",
+            }}
+          >
+            <Board
+              state={game.board}
+              selectedCard={selectedCard}
+              selectedKind={selectedKind}
+              myTeam={me?.team ?? null}
+              onCellClick={handleCellClick}
+              lastMove={lastMove}
+              preview={!myTurn}
+            />
+          </div>
         </div>
       </div>
       <div className="mt-1">
