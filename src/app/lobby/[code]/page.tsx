@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentProfile } from "@/lib/auth/me";
+import { getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 import {
   LobbyClient,
@@ -24,11 +24,11 @@ export default async function LobbyPage({
   const { code } = await params;
   const normalizedCode = code.toUpperCase();
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // This page re-renders on every lobby broadcast (joins, ready toggles),
+  // so identity comes from the cookie claims — no auth round trip.
+  const user = await getCurrentUser();
   if (!user) redirect("/auth?mode=signin");
+  const supabase = await createClient();
 
   const { data: room } = await supabase
     .from("rooms")
@@ -142,9 +142,7 @@ export default async function LobbyPage({
         currentUserId={user.id}
       />
 
-      {!(await getCurrentProfile())?.is_guest && (
-        <InviteFriendsPanel roomId={roomData.id} />
-      )}
+      {!user.isAnonymous && <InviteFriendsPanel roomId={roomData.id} />}
     </div>
   );
 }

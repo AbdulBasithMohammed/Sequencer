@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 import { SoftLinkButton } from "@/components/ui/button";
 import { SoftPill } from "@/components/ui/pill";
@@ -13,12 +13,11 @@ const FEATURES = [
 ] as const;
 
 export default async function Home() {
-  // Verified users land on the lobby — the marketing landing is for visitors.
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (user && user.email_confirmed_at) {
+  // Verified users land on the lobby — the marketing landing is for
+  // visitors. Decoded from the session cookie, so anonymous traffic costs
+  // zero Supabase round trips.
+  const user = await getCurrentUser();
+  if (user && !user.isAnonymous && user.emailVerified) {
     redirect("/play");
   }
 

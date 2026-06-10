@@ -1,52 +1,193 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Board, type BoardState } from "@/components/game/board";
+import { Board } from "@/components/game/board";
 import { HandStrip } from "@/components/game/hand-strip";
-import { TurnBanner, type RosterPlayer } from "@/components/game/turn-banner";
+import { TurnBanner } from "@/components/game/turn-banner";
 import { WinScreen } from "@/components/game/win-screen";
 import { classifyCard, isDeadCard } from "@/lib/board-layout";
 import { playTurnBlip } from "@/lib/sound/turn-blip";
 import { isMuted } from "@/components/game/mute-toggle";
+import {
+  diffBoards,
+  liveGameFromRaw,
+  parseSnapshot,
+  type GameSnapshot,
+  type LastMove,
+  type LiveGame,
+} from "./snapshot";
+
+// The live game loop is fully client-driven: the Postgres broadcast trigger
+// ships the whole public games projection on every version bump, and we
+// apply it straight to local state. No router.refresh(), no server
+// re-render — a turn lands in one realtime hop.
+//
+// Private data (my hand) is never broadcast. We refetch it via get_my_hand
+// exactly when it could have changed: the version bump consumed *my* turn
+// (every hand mutation — play, jack, dead-card swap, AFK auto-discard —
+// happens on the holder's turn).
+//
+// Self-healing, in order of how fast they catch a missed broadcast:
+//   - gap detection (payload version skipped ahead) → snapshot reconcile
+//   - stale-version RPC rejection → snapshot reconcile
+//   - turn-deadline + grace timer → snapshot reconcile. The server's
+//     pg_cron tick always advances an expired turn, so if the deadline
+//     passes without a broadcast we know we're out of sync. This is what
+//     un-freezes a game whose "your turn" broadcast got dropped.
+//   - tab refocus / channel resubscribe → snapshot reconcile
+
+// pg_cron ticks every 5s; give the server that plus delivery slack before
+// concluding we missed the deadline broadcast.
+const DEADLINE_GRACE_MS = 8_000;
 
 export function GameClient({
   gameId,
-  gameVersion,
-  status,
-  winnerTeam,
-  board,
-  turnSeat,
-  turnDeadline,
-  players,
-  hand,
-  roomCode,
-  deckCount,
-  discardCount,
-  lastMove,
+  initialSnapshot,
+  myUserId,
 }: {
   gameId: string;
-  gameVersion: number;
-  status: string;
-  winnerTeam: number | null;
-  board: BoardState;
-  turnSeat: number | null;
-  turnDeadline: string | null;
-  players: RosterPlayer[];
-  hand: string[];
-  roomCode: string | null;
-  deckCount: number;
-  discardCount: number;
-  lastMove: { row: number; col: number; action: "place" | "remove" } | null;
+  initialSnapshot: GameSnapshot;
+  myUserId: string;
 }) {
+  const supabase = useMemo(() => createClient(), []);
+
+  const [game, setGame] = useState<LiveGame>(initialSnapshot.live);
+  const [players, setPlayers] = useState(initialSnapshot.players);
+  const [hand, setHand] = useState<string[]>(initialSnapshot.hand);
+  const [lastMove, setLastMove] = useState<LastMove | null>(
+    initialSnapshot.lastMove,
+  );
+
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [burningIdx, setBurningIdx] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const router = useRouter();
-  const lastHandSigRef = useRef<string>(hand.join(","));
-  const lastTurnSeatRef = useRef<number | null>(turnSeat);
+
+  // Callbacks (broadcast handler, timers) need the freshest state without
+  // resubscribing the channel on every turn.
+  const gameRef = useRef(game);
+  const handFetchSeq = useRef(0);
+  const reconcileInFlight = useRef(false);
+  const lastHandSigRef = useRef<string>(initialSnapshot.hand.join(","));
+  const lastTurnSeatRef = useRef<number | null>(initialSnapshot.live.turnSeat);
+
+  const me = players.find((p) => p.is_me) ?? null;
+  const mySeat = me?.seat_index ?? null;
+  const mySeatRef = useRef(mySeat);
+  useEffect(() => {
+    mySeatRef.current = mySeat;
+  }, [mySeat]);
+
+  const applyLive = useCallback((next: LiveGame, nextLastMove?: LastMove | null) => {
+    const prev = gameRef.current;
+    if (next.version < prev.version) return false;
+    if (next.version === prev.version && next.status === prev.status) {
+      return false;
+    }
+    gameRef.current = next;
+    setGame(next);
+    if (nextLastMove !== undefined) {
+      setLastMove(nextLastMove);
+    } else {
+      const lm = diffBoards(prev.board, next.board);
+      if (lm) setLastMove(lm);
+    }
+    return true;
+  }, []);
+
+  const refetchHand = useCallback(async () => {
+    const seq = ++handFetchSeq.current;
+    const { data } = await supabase.rpc("get_my_hand", { p_game_id: gameId });
+    if (seq !== handFetchSeq.current) return; // a newer fetch superseded us
+    if (Array.isArray(data)) setHand(data as string[]);
+  }, [supabase, gameId]);
+
+  // Full resync straight from Supabase (one hop) — game, roster, hand,
+  // last move. Used by every self-heal path.
+  const reconcile = useCallback(async () => {
+    if (reconcileInFlight.current) return;
+    reconcileInFlight.current = true;
+    try {
+      const { data } = await supabase.rpc("get_game_snapshot", {
+        p_game_id: gameId,
+      });
+      const snap = parseSnapshot(data, myUserId);
+      if (!snap) return;
+      if (snap.live.version >= gameRef.current.version) {
+        gameRef.current = snap.live;
+        setGame(snap.live);
+        setPlayers(snap.players);
+        setLastMove(snap.lastMove);
+        handFetchSeq.current++;
+        setHand(snap.hand);
+      }
+    } finally {
+      reconcileInFlight.current = false;
+    }
+  }, [supabase, gameId, myUserId]);
+
+  // Broadcast subscription — the hot path of every turn. `reconcile` and
+  // `refetchHand` are stable callbacks (their deps are fixed for a mounted
+  // game), so listing them as deps never resubscribes the channel.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`game:${gameId}`)
+      .on("broadcast", { event: "update" }, (msg) => {
+        const payload = msg.payload as
+          | Parameters<typeof liveGameFromRaw>[0]
+          | undefined;
+        if (!payload || typeof payload.version !== "number") return;
+        const prev = gameRef.current;
+        if (payload.version <= prev.version) return; // dedupe / out-of-order
+        // Skinny {version}-only payload (pre-migration trigger): we know
+        // we're behind but weren't handed the state — fetch it instead.
+        if (!Array.isArray(payload.board)) {
+          reconcile();
+          return;
+        }
+        const next = liveGameFromRaw(payload);
+        const prevTurnSeat = prev.turnSeat;
+        const gap = payload.version > prev.version + 1;
+        applyLive(next);
+        // Any move that touched my hand happened while I held the turn.
+        if (prevTurnSeat != null && prevTurnSeat === mySeatRef.current) {
+          refetchHand();
+        }
+        // Missed at least one event — board is already current (payload is
+        // the full state) but the hand might not be; resync everything.
+        if (gap) reconcile();
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") reconcile();
+      });
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") reconcile();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
+    return () => {
+      supabase.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [supabase, gameId, applyLive, reconcile, refetchHand]);
+
+  // Freeze-proof backstop: the server always advances an expired turn (cron
+  // tick), so a deadline that passes silently means we missed a broadcast.
+  // Reschedules itself on every applied update.
+  useEffect(() => {
+    if (game.status !== "in_game" || !game.turnDeadline) return;
+    const due =
+      new Date(game.turnDeadline).getTime() - Date.now() + DEADLINE_GRACE_MS;
+    const timer = window.setTimeout(
+      () => reconcile(),
+      Math.max(due, 1_000),
+    );
+    return () => window.clearTimeout(timer);
+  }, [game.status, game.turnDeadline, game.version, reconcile]);
 
   useEffect(() => {
     const sig = hand.join(",");
@@ -57,25 +198,34 @@ export function GameClient({
   }, [hand]);
 
   // Subtle audio cue on any turn change. Skipped on initial mount
-  // (ref starts equal to the prop) and when muted (persisted in
-  // localStorage via MuteToggle in the header).
+  // (ref starts equal to the prop) and when muted.
   useEffect(() => {
-    if (lastTurnSeatRef.current === turnSeat) return;
-    lastTurnSeatRef.current = turnSeat;
-    if (status !== "in_game") return;
+    if (lastTurnSeatRef.current === game.turnSeat) return;
+    lastTurnSeatRef.current = game.turnSeat;
+    if (game.status !== "in_game") return;
     if (isMuted()) return;
     playTurnBlip();
-  }, [turnSeat, status]);
+  }, [game.turnSeat, game.status]);
 
-  const me = players.find((p) => p.is_me) ?? null;
-  const gameFinished = status === "finished";
-  const myTurn = !gameFinished && me != null && me.seat_index === turnSeat;
+  const gameFinished = game.status === "finished";
+  const myTurn = !gameFinished && me != null && me.seat_index === game.turnSeat;
   const selectedCard = selectedIdx != null ? (hand[selectedIdx] ?? null) : null;
   const selectedKind = selectedCard ? classifyCard(selectedCard) : null;
   const selectedIsDead =
-    selectedCard != null && isDeadCard(selectedCard, board);
+    selectedCard != null && isDeadCard(selectedCard, game.board);
   const interactable =
     myTurn && !submitting && burningIdx == null && !gameFinished;
+
+  function handleRpcError(rpcError: { code?: string; message: string }) {
+    setSubmitting(false);
+    if (rpcError.code === "40001") {
+      // Stale optimistic-concurrency version — resync and let them retry.
+      reconcile();
+      setError("The board moved on — try again.");
+      return;
+    }
+    setError(rpcError.message);
+  }
 
   async function handleCellClick(row: number, col: number) {
     if (!interactable || selectedCard == null || selectedIdx == null) return;
@@ -86,56 +236,65 @@ export function GameClient({
     setError(null);
     setSubmitting(true);
     const idxBeingPlayed = selectedIdx;
-    const supabase = createClient();
     const rpcName =
       selectedKind === "two_eyed_jack"
         ? "play_wild"
         : selectedKind === "one_eyed_jack"
           ? "play_remove"
           : "play_move";
-    const { error: rpcError } = await supabase.rpc(rpcName, {
+    const { data: newVersion, error: rpcError } = await supabase.rpc(rpcName, {
       p_game_id: gameId,
-      p_client_version: gameVersion,
+      p_client_version: gameRef.current.version,
       p_card: selectedCard,
       p_row: row,
       p_col: col,
     });
     if (rpcError) {
-      setSubmitting(false);
-      setError(rpcError.message);
+      handleRpcError(rpcError);
       return;
     }
     setBurningIdx(idxBeingPlayed);
     setSelectedIdx(null);
+    awaitOwnBroadcast(newVersion);
     await new Promise((r) => window.setTimeout(r, 540));
     setSubmitting(false);
-    router.refresh();
   }
 
   async function handleSwapDead(card: string, idx: number) {
     if (!interactable) return;
-    if (classifyCard(card) !== "normal" || !isDeadCard(card, board)) {
+    if (classifyCard(card) !== "normal" || !isDeadCard(card, game.board)) {
       setError("Only dead cards can be swapped.");
       return;
     }
     setError(null);
     setSubmitting(true);
-    const supabase = createClient();
-    const { error: rpcError } = await supabase.rpc("swap_dead_card", {
-      p_game_id: gameId,
-      p_client_version: gameVersion,
-      p_card: card,
-    });
+    const { data: newVersion, error: rpcError } = await supabase.rpc(
+      "swap_dead_card",
+      {
+        p_game_id: gameId,
+        p_client_version: gameRef.current.version,
+        p_card: card,
+      },
+    );
     if (rpcError) {
-      setSubmitting(false);
-      setError(rpcError.message);
+      handleRpcError(rpcError);
       return;
     }
     setBurningIdx(idx);
     if (selectedIdx === idx) setSelectedIdx(null);
+    awaitOwnBroadcast(newVersion);
     await new Promise((r) => window.setTimeout(r, 540));
     setSubmitting(false);
-    router.refresh();
+  }
+
+  // The mutation RPCs return the version they produced. The broadcast for
+  // it normally lands within the burn animation; if it hasn't after a
+  // beat, pull the state ourselves instead of leaving the UI behind.
+  function awaitOwnBroadcast(newVersion: unknown) {
+    if (typeof newVersion !== "number") return;
+    window.setTimeout(() => {
+      if (gameRef.current.version < newVersion) reconcile();
+    }, 1_500);
   }
 
   function handleSelect(idx: number) {
@@ -149,30 +308,49 @@ export function GameClient({
 
   return (
     <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
+            Room
+          </div>
+          <div
+            className="font-mono font-bold leading-none text-ink"
+            style={{ fontSize: 28, letterSpacing: "0.06em" }}
+          >
+            {initialSnapshot.roomCode ?? "?"}
+          </div>
+        </div>
+        <div className="text-[12px] text-ink-soft">
+          v<span className="font-mono font-bold text-ink">{game.version}</span>
+        </div>
+      </div>
+
       {gameFinished ? (
         <div className="mb-4">
           <WinScreen
-            winnerTeam={winnerTeam}
+            winnerTeam={game.winnerTeam}
             players={players}
-            roomCode={roomCode}
+            roomCode={initialSnapshot.roomCode}
           />
         </div>
       ) : (
         <div className="mb-3">
           <TurnBanner
             players={players}
-            turnSeat={turnSeat}
-            turnDeadline={turnDeadline}
+            turnSeat={game.turnSeat}
+            turnDeadline={game.turnDeadline}
           />
-          <DeckIndicator deckCount={deckCount} discardCount={discardCount} />
+          <DeckIndicator
+            deckCount={game.deckCount}
+            discardCount={game.discardCount}
+          />
         </div>
       )}
       <div
         className="relative mx-auto"
         style={{
           aspectRatio: "70 / 50",
-          width:
-            "min(96vw, calc((100dvh - 280px) * 70 / 50), 1100px)",
+          width: "min(96vw, calc((100dvh - 280px) * 70 / 50), 1100px)",
         }}
       >
         <div
@@ -184,7 +362,7 @@ export function GameClient({
           }}
         >
           <Board
-            state={board}
+            state={game.board}
             selectedCard={selectedCard}
             selectedKind={selectedKind}
             myTeam={me?.team ?? null}
@@ -200,8 +378,8 @@ export function GameClient({
           {gameFinished ? null : !myTurn ? (
             <span className="ml-2 font-normal normal-case tracking-normal text-ink-soft">
               · waiting on{" "}
-              {players.find((p) => p.seat_index === turnSeat)?.display_name ??
-                "another player"}
+              {players.find((p) => p.seat_index === game.turnSeat)
+                ?.display_name ?? "another player"}
             </span>
           ) : null}
         </div>
@@ -303,4 +481,3 @@ function DeckIndicator({
     </div>
   );
 }
-
