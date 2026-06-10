@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 
 const BASE_NAV = [
@@ -31,17 +31,15 @@ export function AppSidebar({
     (item) => !("registeredOnly" in item && item.registeredOnly && isGuest),
   );
 
-  // Auto-close the mobile dropdown whenever the route changes (after
-  // clicking a link, etc).
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
+  // Auto-close the mobile dropdown when a nav link is clicked — handled
+  // on the event instead of a pathname effect so navigation doesn't
+  // trigger an extra render pass.
   const navLinks = nav.map((item) => (
     <Link
       key={item.href}
       href={item.href}
       prefetch
+      onClick={() => setOpen(false)}
       className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-[14px] font-semibold ${
         isActive(item.href)
           ? "bg-ink text-canvas"

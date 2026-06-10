@@ -52,14 +52,11 @@ export function FriendsClient({
     };
   }, [userId, router]);
 
-  // Debounced search.
+  // Debounced search. Clearing on empty input lives in the input's
+  // onChange handler — the effect only schedules lookups.
   useEffect(() => {
     const trimmed = query.trim();
-    if (!trimmed) {
-      setResults([]);
-      return;
-    }
-    setSearching(true);
+    if (!trimmed) return;
     const handle = window.setTimeout(async () => {
       const data = await searchUsers(trimmed);
       setResults(data);
@@ -94,7 +91,16 @@ export function FriendsClient({
           type="text"
           autoComplete="off"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            const value = e.target.value;
+            setQuery(value);
+            if (value.trim()) {
+              setSearching(true);
+            } else {
+              setSearching(false);
+              setResults([]);
+            }
+          }}
           placeholder='Try "alice" or "alice #ABC123"'
           className="mt-2 w-full rounded-2xl border border-line bg-canvas px-4 py-3 text-[15px] text-ink outline-none focus:border-ink"
         />

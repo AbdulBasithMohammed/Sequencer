@@ -19,15 +19,15 @@ function flushAndRefresh(router: ReturnType<typeof useRouter>) {
  * postgres_changes (no per-row RLS dispatch), fixes mobile delivery lag.
  *
  * Events on lobby:<roomId>:
- *   - "update":       rooms/room_players/room_bans mutation, payload {version}
- *   - "game_started": games INSERT, payload {game_id} — used to navigate
- *                     the non-host straight to /game/<id> without waiting
- *                     for a slow postgres_changes event.
- *
- * Kept on postgres_changes (because it needs event-specific payload
- * the broadcast doesn't carry):
- *   - DELETE on room_players: detect when *I* was the deleted row so we
- *     can show kicked/banned redirect with the right query param
+ *   - "update":         rooms/room_players/room_bans mutation, payload
+ *                       {version}
+ *   - "game_started":   games INSERT, payload {game_id} — used to navigate
+ *                       the non-host straight to /game/<id>
+ *   - "player_removed": room_players DELETE, payload {user_id} — detect
+ *                       when *I* was removed so we can redirect with the
+ *                       right kicked/banned query param. Replaced the last
+ *                       postgres_changes binding (slow path, and it
+ *                       dragged out the channel SUBSCRIBE handshake).
  *
  * Defence in depth:
  *   - subscribe-and-reconcile on SUBSCRIBED status
@@ -70,41 +70,33 @@ export function LobbyRefresher({
           ?.game_id;
         if (gameId) router.push(`/game/${gameId}`);
       })
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "room_players",
-          filter: `room_id=eq.${roomId}`,
-        },
-        async (payload) => {
-          const deletedUserId = (payload.old as { user_id?: string } | null)
-            ?.user_id;
-          if (deletedUserId === userId) {
-            const voluntary =
-              typeof window !== "undefined" &&
-              window.sessionStorage.getItem("voluntary-leave") === roomId;
-            if (voluntary) {
-              window.sessionStorage.removeItem("voluntary-leave");
-              return; // server action handles the redirect
-            }
-            const { data: ban } = await supabase
-              .from("room_bans")
-              .select("user_id")
-              .eq("room_id", roomId)
-              .eq("user_id", userId)
-              .maybeSingle();
-            if (ban) {
-              router.push(`/play?banned=${roomCode}`);
-            } else {
-              router.push(`/play?kicked=${roomCode}`);
-            }
-            return;
-          }
+      .on("broadcast", { event: "player_removed" }, async (msg) => {
+        const removedUserId = (msg.payload as { user_id?: string } | undefined)
+          ?.user_id;
+        if (removedUserId !== userId) {
           flushAndRefresh(router);
-        },
-      )
+          return;
+        }
+        const voluntary =
+          window.sessionStorage.getItem("voluntary-leave") === roomId;
+        if (voluntary) {
+          window.sessionStorage.removeItem("voluntary-leave");
+          return; // server action handles the redirect
+        }
+        // RLS lets a banned user see their own ban row, so this tells
+        // kicked and banned apart.
+        const { data: ban } = await supabase
+          .from("room_bans")
+          .select("user_id")
+          .eq("room_id", roomId)
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (ban) {
+          router.push(`/play?banned=${roomCode}`);
+        } else {
+          router.push(`/play?kicked=${roomCode}`);
+        }
+      })
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
           flushAndRefresh(router);

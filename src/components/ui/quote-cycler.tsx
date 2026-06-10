@@ -39,16 +39,24 @@ export function QuoteCycler() {
   const [visible, setVisible] = useState(true);
 
   useEffect(() => {
-    setIdx(Math.floor(Math.random() * QUOTES.length));
-    const interval = setInterval(() => {
+    // Random jump deferred a tick so the hydration pass still renders
+    // quote 0 (matching the server) before each session starts fresh.
+    const startTimer = window.setTimeout(() => {
+      setIdx(Math.floor(Math.random() * QUOTES.length));
+    }, 0);
+    let fadeTimer: number | undefined;
+    const interval = window.setInterval(() => {
       setVisible(false);
-      const t = setTimeout(() => {
+      fadeTimer = window.setTimeout(() => {
         setIdx((i) => (i + 1) % QUOTES.length);
         setVisible(true);
       }, FADE_MS);
-      return () => clearTimeout(t);
     }, CYCLE_MS);
-    return () => clearInterval(interval);
+    return () => {
+      window.clearTimeout(startTimer);
+      window.clearInterval(interval);
+      if (fadeTimer !== undefined) window.clearTimeout(fadeTimer);
+    };
   }, []);
 
   const q = QUOTES[idx];

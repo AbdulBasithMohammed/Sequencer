@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 const STORAGE_KEY = "sequencr.sound.muted";
 
@@ -13,23 +13,33 @@ export function isMuted(): boolean {
   }
 }
 
-export function MuteToggle() {
-  const [muted, setMuted] = useState(false);
-  const [mounted, setMounted] = useState(false);
+// localStorage as an external store: cross-tab changes arrive via real
+// storage events; same-tab toggles dispatch a synthetic one (below), which
+// also feeds the in-game sound hook.
+function subscribe(onChange: () => void) {
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === STORAGE_KEY) onChange();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}
 
-  useEffect(() => {
-    setMuted(isMuted());
-    setMounted(true);
-    function onStorage(e: StorageEvent) {
-      if (e.key === STORAGE_KEY) setMuted(e.newValue === "1");
-    }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
+function getSnapshot(): boolean | null {
+  return isMuted();
+}
+
+// null = "not on the client yet" → render the fixed-size placeholder
+// during SSR/hydration so there's no flicker; React swaps in the real
+// snapshot right after hydration.
+function getServerSnapshot(): boolean | null {
+  return null;
+}
+
+export function MuteToggle() {
+  const muted = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   function toggle() {
-    const next = !muted;
-    setMuted(next);
+    const next = !(muted ?? false);
     try {
       window.localStorage.setItem(STORAGE_KEY, next ? "1" : "0");
       // Tell other tabs (and the in-page sound hook) about the change.
@@ -44,9 +54,7 @@ export function MuteToggle() {
     }
   }
 
-  // Avoid a hydration flicker — render a fixed-width placeholder until
-  // we've read localStorage on the client.
-  if (!mounted) {
+  if (muted === null) {
     return (
       <span
         aria-hidden

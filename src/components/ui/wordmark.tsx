@@ -1,3 +1,5 @@
+import Image from "next/image";
+
 export function Wordmark({
   size = 26,
   color = "var(--color-ink)",
@@ -19,7 +21,7 @@ export function Wordmark({
         letterSpacing: "-0.02em",
       }}
     >
-      <img
+      <Image
         src="/wordmark-icon.png"
         alt=""
         aria-hidden

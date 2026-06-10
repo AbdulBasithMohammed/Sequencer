@@ -79,7 +79,6 @@ export function Board({
               col={c}
               isMatch={isMatch}
               isLast={isLast}
-              lastAction={isLast ? lastMove.action : null}
               preview={preview}
               onClick={
                 isMatch && !preview && onCellClick
@@ -101,7 +100,6 @@ function Cell({
   col,
   isMatch,
   isLast,
-  lastAction,
   preview,
   onClick,
 }: {
@@ -111,7 +109,6 @@ function Cell({
   col: number;
   isMatch: boolean;
   isLast: boolean;
-  lastAction: "place" | "remove" | null;
   preview: boolean;
   onClick?: () => void;
 }) {
