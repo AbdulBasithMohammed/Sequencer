@@ -124,35 +124,27 @@ export function WinScreen({
         </div>
       ) : null}
 
-      {roomCode ? (
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {roomId ? (
-            <button
-              type="button"
-              onClick={handleRematch}
-              disabled={pending || readied}
-              className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-canvas shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {pending || readied ? "Readying up…" : "Rematch"}
-            </button>
-          ) : null}
-          <SoftLinkButton
-            href={`/lobby/${roomCode}`}
-            variant="outline"
-            size="sm"
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {roomId && roomCode ? (
+          <button
+            type="button"
+            onClick={handleRematch}
+            disabled={pending || readied}
+            className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-canvas shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            Back to lobby
-          </SoftLinkButton>
-        </div>
-      ) : (
-        <SoftLinkButton href="/play" variant="primary" size="sm">
-          Back to play
+            {pending || readied ? "Readying up…" : "Rematch"}
+          </button>
+        ) : null}
+        <SoftLinkButton href="/play" variant="outline" size="sm">
+          Exit to menu
         </SoftLinkButton>
-      )}
-
-      <div className="text-[10px] uppercase tracking-[0.15em] text-ink-soft">
-        Rematch readies you up — the host starts when everyone&apos;s in.
       </div>
+
+      {roomId && roomCode ? (
+        <div className="text-[10px] uppercase tracking-[0.15em] text-ink-soft">
+          Rematch readies you up — the host starts when everyone&apos;s in.
+        </div>
+      ) : null}
     </div>
   );
 }

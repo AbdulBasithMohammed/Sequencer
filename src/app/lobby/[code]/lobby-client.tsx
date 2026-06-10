@@ -459,7 +459,18 @@ export function LobbyClient({
         <LeaveButton roomId={room.id} />
 
         {meIsHost ? (
+          // Status text first: its width changes with every roster/ready
+          // update, and leading the right-aligned group lets it grow into
+          // the empty middle — the two buttons stay pinned in place. The
+          // Start button keeps one fixed label for the same reason.
           <div className="flex items-center gap-3">
+            <span className="text-[13px] whitespace-nowrap text-ink-soft">
+              {nonHostPlayers.length === 0
+                ? "Waiting for players…"
+                : canStart
+                  ? "Everyone’s ready"
+                  : `${nonHostReadyCount} of ${nonHostPlayers.length} ready`}
+            </span>
             <SoftButton
               type="button"
               variant="outline"
@@ -468,17 +479,10 @@ export function LobbyClient({
             >
               <span aria-hidden>+</span> Add bot
             </SoftButton>
-            <span className="text-[13px] text-ink-soft">
-              {nonHostPlayers.length === 0
-                ? "Waiting for players…"
-                : canStart
-                  ? "Everyone’s ready"
-                  : `${nonHostReadyCount} of ${nonHostPlayers.length} ready`}
-            </span>
             <form action={startGameAction}>
               <input type="hidden" name="code" value={room.code} />
               <SoftButton type="submit" variant="primary" disabled={!canStart}>
-                {canStart ? "Start game" : "Waiting for ready"}
+                Start game
               </SoftButton>
             </form>
           </div>
