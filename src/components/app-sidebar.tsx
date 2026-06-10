@@ -75,10 +75,10 @@ export function AppSidebar({
           </div>
         </div>
       </Link>
-      <form action={signOut} className="mt-2">
+      <form action={signOut} className="mt-2.5">
         <button
           type="submit"
-          className="text-[11px] font-semibold text-ink-soft hover:text-ink"
+          className="w-full rounded-xl border border-line bg-canvas px-3 py-2 text-[12px] font-semibold text-ink-soft transition-colors hover:bg-line/60 hover:text-ink"
         >
           {isGuest ? "Leave guest session" : "Sign out"}
         </button>
