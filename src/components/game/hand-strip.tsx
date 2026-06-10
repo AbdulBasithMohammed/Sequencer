@@ -157,7 +157,7 @@ export function HandStrip({
           transform: `scale(${scale})`,
           pointerEvents: disabled ? "none" : undefined,
         }}
-        onMouseLeave={() => setHovered(null)}
+        onPointerLeave={() => setHovered(null)}
       >
         {cards.map((card, i) => {
           const offset = i - center;
@@ -213,7 +213,14 @@ export function HandStrip({
                 zIndex: isBurning ? 200 : isActive ? 100 : i,
                 animation,
               }}
-              onMouseEnter={() => setHovered(i)}
+              // Hover-lift is mouse-only. Touch taps fire a synthetic
+              // mouseenter with no matching mouseleave, which kept a
+              // deselected card popped out until the next tap landed
+              // somewhere else. pointerType tells the truth per event,
+              // so touchscreen laptops still get mouse hover.
+              onPointerEnter={(e) => {
+                if (e.pointerType === "mouse") setHovered(i);
+              }}
               onClick={onSelect && !isBurning ? () => onSelect(i) : undefined}
             >
               <div
