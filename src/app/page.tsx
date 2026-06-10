@@ -112,6 +112,14 @@ export default async function Home() {
               <span>Friendly competitive</span>
               <span>· Free to play</span>
               <span>· No ads, ever</span>
+              <a
+                href="https://buymeacoffee.com/abmd"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-semibold text-ink-soft underline-offset-4 hover:text-ink hover:underline"
+              >
+                · ☕ Buy me a coffee
+              </a>
             </div>
           </div>
 

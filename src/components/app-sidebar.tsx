@@ -51,6 +51,17 @@ export function AppSidebar({
     </Link>
   ));
 
+  const coffeeLink = (
+    <a
+      href="https://buymeacoffee.com/abmd"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-semibold text-ink-soft hover:bg-surface hover:text-ink"
+    >
+      <span aria-hidden>☕</span> Buy me a coffee
+    </a>
+  );
+
   const userCard = (
     <div className="rounded-2xl border border-line bg-surface p-3.5">
       <Link href="/me" className="flex items-center gap-2.5 hover:opacity-80">
@@ -104,6 +115,7 @@ export function AppSidebar({
         {open && (
           <div className="flex flex-col gap-2 border-b border-line bg-canvas p-5">
             {navLinks}
+            {coffeeLink}
             <div className="mt-2">{userCard}</div>
           </div>
         )}
@@ -115,7 +127,10 @@ export function AppSidebar({
           <Wordmark size={22} accent="pink" />
         </Link>
         {navLinks}
-        <div className="mt-auto">{userCard}</div>
+        <div className="mt-auto">
+          {coffeeLink}
+          <div className="mt-2">{userCard}</div>
+        </div>
       </aside>
     </>
   );
