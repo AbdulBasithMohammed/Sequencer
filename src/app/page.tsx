@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 import { SoftLinkButton } from "@/components/ui/button";
 import { SoftPill } from "@/components/ui/pill";
+import { CoffeeButton } from "@/components/ui/coffee-button";
 
 const FEATURES = [
   ["Cozy rooms", "Invite friends with a 6-character code."],
@@ -184,6 +185,14 @@ export default async function Home() {
             </div>
           ))}
         </section>
+
+        {/* Footer */}
+        <footer className="flex flex-col items-center gap-3 border-t border-line py-6 sm:flex-row sm:justify-between">
+          <div className="text-[12px] text-ink-soft">
+            Built by one person, fuelled by caffeine.
+          </div>
+          <CoffeeButton />
+        </footer>
       </div>
 
       {/* JSON-LD: tell search engines this is a multiplayer board game

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
+import { CoffeeButton } from "@/components/ui/coffee-button";
 
 const BASE_NAV = [
   { href: "/play", label: "Play" },
@@ -51,19 +52,7 @@ export function AppSidebar({
     </Link>
   ));
 
-  // Styled like the Buy Me a Coffee brand button, but with the app's own
-  // butter token so it sits naturally in the palette.
-  const coffeeLink = (
-    <a
-      href="https://buymeacoffee.com/abmd"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center justify-center gap-2 rounded-full px-3.5 py-2.5 text-[13px] font-bold text-ink shadow-sm transition-opacity hover:opacity-85"
-      style={{ background: "var(--color-butter)" }}
-    >
-      <span aria-hidden>☕</span> Buy me a coffee
-    </a>
-  );
+  const coffeeLink = <CoffeeButton className="w-full" />;
 
   const userCard = (
     <div className="rounded-2xl border border-line bg-surface p-3.5">
