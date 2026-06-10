@@ -60,5 +60,8 @@ CLAUDE.md
 AGENTS.md
 HANDOFF.md
 
-# Destructive admin tooling — kept local, not pushed
-scripts/
+# Destructive admin tooling — kept local, not pushed.
+# (scripts/* instead of scripts/ so the read-only analytics
+# queries below can be re-included and versioned.)
+scripts/*
+!scripts/analytics
