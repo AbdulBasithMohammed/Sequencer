@@ -51,12 +51,15 @@ export function AppSidebar({
     </Link>
   ));
 
+  // Styled like the Buy Me a Coffee brand button, but with the app's own
+  // butter token so it sits naturally in the palette.
   const coffeeLink = (
     <a
       href="https://buymeacoffee.com/abmd"
       target="_blank"
       rel="noopener noreferrer"
-      className="flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[12px] font-semibold text-ink-soft hover:bg-surface hover:text-ink"
+      className="flex items-center justify-center gap-2 rounded-full px-3.5 py-2.5 text-[13px] font-bold text-ink shadow-sm transition-opacity hover:opacity-85"
+      style={{ background: "var(--color-butter)" }}
     >
       <span aria-hidden>☕</span> Buy me a coffee
     </a>

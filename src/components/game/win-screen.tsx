@@ -145,6 +145,15 @@ export function WinScreen({
           Rematch readies you up — the host starts when everyone&apos;s in.
         </div>
       ) : null}
+
+      <a
+        href="https://buymeacoffee.com/abmd"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-[11px] font-semibold text-ink-soft underline-offset-4 hover:text-ink hover:underline"
+      >
+        Enjoying Sequencr? ☕ Buy me a coffee
+      </a>
     </div>
   );
 }
