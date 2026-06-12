@@ -171,19 +171,27 @@ export function LobbyClient({
 
   // Exit ghosts: when a player disappears from the roster (kick, leave,
   // remove-bot), keep a non-interactive copy mounted briefly so the card
-  // can animate out instead of vanishing. Guarded render-time adjustment
-  // (React's "derive state from props" pattern); the timeout sweeps the
-  // ghosts after the pop-out animation finishes.
-  const [prevRoster, setPrevRoster] = useState(optimisticPlayers);
+  // can animate out instead of vanishing. We diff by a content SIGNATURE
+  // of the seated user_ids, not array identity — useOptimistic returns a
+  // fresh array every render during a transition, so an identity compare
+  // would setState on every render and crash with "too many re-renders".
+  const rosterSig = optimisticPlayers.map((p) => p.user_id).join("|");
+  const [tracked, setTracked] = useState({
+    sig: rosterSig,
+    players: optimisticPlayers as Player[],
+  });
   const [ghosts, setGhosts] = useState<Player[]>([]);
-  if (optimisticPlayers !== prevRoster) {
-    setPrevRoster(optimisticPlayers);
+  if (rosterSig !== tracked.sig) {
     const ids = new Set(optimisticPlayers.map((p) => p.user_id));
-    const gone = prevRoster.filter(
-      (p) =>
-        !ids.has(p.user_id) && !ghosts.some((g) => g.user_id === p.user_id),
-    );
-    if (gone.length > 0) setGhosts((g) => [...g, ...gone]);
+    const gone = tracked.players.filter((p) => !ids.has(p.user_id));
+    setTracked({ sig: rosterSig, players: optimisticPlayers });
+    setGhosts((g) => {
+      const kept = g.filter((x) => !ids.has(x.user_id)); // drop reappeared
+      const added = gone.filter(
+        (p) => !kept.some((x) => x.user_id === p.user_id),
+      );
+      return added.length === 0 && kept.length === g.length ? g : [...kept, ...added];
+    });
   }
   useEffect(() => {
     if (ghosts.length === 0) return;
