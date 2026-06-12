@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Board } from "@/components/game/board";
 import { HandStrip } from "@/components/game/hand-strip";
 import { TurnBanner } from "@/components/game/turn-banner";
-import { WinScreen } from "@/components/game/win-screen";
+import { WinScreen, RematchActions } from "@/components/game/win-screen";
 import { classifyCard, isDeadCard } from "@/lib/board-layout";
 import { playTurnBlip } from "@/lib/sound/turn-blip";
 import { isMuted } from "@/components/game/mute-toggle";
@@ -457,8 +457,10 @@ export function GameClient({
 
       {gameFinished ? (
         // Slim result strip where the turn banner was — the win card itself
-        // floats in an overlay so the board never gets pushed down.
-        <div className="mb-3 flex min-h-[34px] items-center justify-center gap-3">
+        // floats in an overlay so the board never gets pushed down. Once
+        // dismissed, the strip carries the Rematch / Exit actions so you
+        // can act without reopening the overlay.
+        <div className="mb-3 flex min-h-[34px] flex-wrap items-center justify-center gap-x-3 gap-y-2">
           <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-ink">
             <span
               aria-hidden
@@ -477,13 +479,10 @@ export function GameClient({
                 : `${WIN_TEAM_LABEL[game.winnerTeam] ?? `Team ${game.winnerTeam}`} wins`}
           </span>
           {resultsDismissed && (
-            <button
-              type="button"
-              onClick={() => setResultsDismissed(false)}
-              className="rounded-full border border-line bg-surface px-3 py-1 text-[12px] font-semibold text-ink transition-colors hover:bg-canvas"
-            >
-              Show results
-            </button>
+            <RematchActions
+              roomId={initialSnapshot.roomId}
+              roomCode={initialSnapshot.roomCode}
+            />
           )}
         </div>
       ) : (

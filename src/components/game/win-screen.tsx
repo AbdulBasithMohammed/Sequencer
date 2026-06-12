@@ -44,18 +44,14 @@ const CONFETTI: Array<{
   { left: 94, size: 15, delay: 520, dur: 1700, fall: 190, spin: -220, glyph: "♥", color: "var(--color-blue)" },
 ];
 
-export function WinScreen({
-  winnerTeam,
-  players,
+// Rematch + Exit, shared by the win overlay and the slim in-board result
+// strip. Self-contained so either mount works on its own.
+export function RematchActions({
   roomId,
   roomCode,
-  onViewBoard,
 }: {
-  winnerTeam: number | null;
-  players: RosterPlayer[];
   roomId: string | null;
   roomCode: string | null;
-  onViewBoard?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -75,6 +71,38 @@ export function WinScreen({
     });
   }
 
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      {roomId && roomCode ? (
+        <button
+          type="button"
+          onClick={handleRematch}
+          disabled={pending || readied}
+          className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-canvas shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+        >
+          {pending || readied ? "Readying up…" : "Rematch"}
+        </button>
+      ) : null}
+      <SoftLinkButton href="/play" variant="outline" size="sm">
+        Exit to menu
+      </SoftLinkButton>
+    </div>
+  );
+}
+
+export function WinScreen({
+  winnerTeam,
+  players,
+  roomId,
+  roomCode,
+  onViewBoard,
+}: {
+  winnerTeam: number | null;
+  players: RosterPlayer[];
+  roomId: string | null;
+  roomCode: string | null;
+  onViewBoard?: () => void;
+}) {
   const me = players.find((p) => p.is_me) ?? null;
   const myTeam = me?.team ?? null;
   const noWinner = winnerTeam == null;
@@ -173,21 +201,7 @@ export function WinScreen({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
-        {roomId && roomCode ? (
-          <button
-            type="button"
-            onClick={handleRematch}
-            disabled={pending || readied}
-            className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-[13px] font-semibold text-canvas shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-          >
-            {pending || readied ? "Readying up…" : "Rematch"}
-          </button>
-        ) : null}
-        <SoftLinkButton href="/play" variant="outline" size="sm">
-          Exit to menu
-        </SoftLinkButton>
-      </div>
+      <RematchActions roomId={roomId} roomCode={roomCode} />
 
       {roomId && roomCode ? (
         <div className="text-[10px] uppercase tracking-[0.15em] text-ink-soft">
