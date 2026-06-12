@@ -79,9 +79,21 @@ export function GameClient({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [channelDown, setChannelDown] = useState(false);
-  // Results overlay can be dismissed to inspect the final board.
+  // Results overlay can be dismissed to inspect the final board. Dismissal
+  // is two-phase: `closing` keeps it mounted while the exit animation
+  // plays, then it unmounts for real.
   const [resultsDismissed, setResultsDismissed] = useState(false);
+  const [resultsClosing, setResultsClosing] = useState(false);
   const online = useBrowserOnline();
+
+  function dismissResults() {
+    if (resultsClosing) return;
+    setResultsClosing(true);
+    window.setTimeout(() => {
+      setResultsDismissed(true);
+      setResultsClosing(false);
+    }, 250);
+  }
 
   // Callbacks (broadcast handler, timers) need the freshest state without
   // resubscribing the channel on every turn.
@@ -421,11 +433,15 @@ export function GameClient({
           aria-modal="true"
           aria-label="Game results"
           className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-ink/40 px-4 py-10 backdrop-blur-[2px] sm:items-center"
-          style={{ animation: "overlay-fade 250ms ease-out backwards" }}
-          onClick={() => setResultsDismissed(true)}
+          style={{
+            animation: resultsClosing
+              ? "overlay-fade 250ms ease-in reverse forwards"
+              : "overlay-fade 250ms ease-out backwards",
+          }}
+          onClick={dismissResults}
         >
           <div
-            className="w-full max-w-[520px]"
+            className={`w-full max-w-[520px] ${resultsClosing ? "pop-out" : ""}`}
             onClick={(e) => e.stopPropagation()}
           >
             <WinScreen
@@ -433,7 +449,7 @@ export function GameClient({
               players={players}
               roomId={initialSnapshot.roomId}
               roomCode={initialSnapshot.roomCode}
-              onViewBoard={() => setResultsDismissed(true)}
+              onViewBoard={dismissResults}
             />
           </div>
         </div>
