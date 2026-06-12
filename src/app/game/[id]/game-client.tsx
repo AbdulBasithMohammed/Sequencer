@@ -45,6 +45,17 @@ import {
 // concluding we missed the deadline broadcast.
 const DEADLINE_GRACE_MS = 8_000;
 
+const WIN_TEAM_COLOR: Record<number, string> = {
+  1: "var(--color-pink)",
+  2: "var(--color-blue)",
+  3: "var(--color-mint)",
+};
+const WIN_TEAM_LABEL: Record<number, string> = {
+  1: "Pink",
+  2: "Blue",
+  3: "Mint",
+};
+
 export function GameClient({
   gameId,
   initialSnapshot,
@@ -68,6 +79,8 @@ export function GameClient({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [channelDown, setChannelDown] = useState(false);
+  // Results overlay can be dismissed to inspect the final board.
+  const [resultsDismissed, setResultsDismissed] = useState(false);
   const online = useBrowserOnline();
 
   // Callbacks (broadcast handler, timers) need the freshest state without
@@ -397,6 +410,34 @@ export function GameClient({
   return (
     <>
       <ConnectionPill show={channelDown || !online} />
+
+      {/* Results overlay: floats above the dimmed board so the layout
+          never reflows. Click outside (or "view final board") to peek at
+          the finished board; the strip's button brings it back. Inline
+          animation so the page-level stagger rules can't delay it. */}
+      {gameFinished && !resultsDismissed && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Game results"
+          className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-ink/40 px-4 py-10 backdrop-blur-[2px] sm:items-center"
+          style={{ animation: "overlay-fade 250ms ease-out backwards" }}
+          onClick={() => setResultsDismissed(true)}
+        >
+          <div
+            className="w-full max-w-[520px]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <WinScreen
+              winnerTeam={game.winnerTeam}
+              players={players}
+              roomId={initialSnapshot.roomId}
+              roomCode={initialSnapshot.roomCode}
+              onViewBoard={() => setResultsDismissed(true)}
+            />
+          </div>
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
@@ -415,13 +456,35 @@ export function GameClient({
       </div>
 
       {gameFinished ? (
-        <div className="mb-4">
-          <WinScreen
-            winnerTeam={game.winnerTeam}
-            players={players}
-            roomId={initialSnapshot.roomId}
-            roomCode={initialSnapshot.roomCode}
-          />
+        // Slim result strip where the turn banner was — the win card itself
+        // floats in an overlay so the board never gets pushed down.
+        <div className="mb-3 flex min-h-[34px] items-center justify-center gap-3">
+          <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-ink">
+            <span
+              aria-hidden
+              className="inline-block size-2.5 rounded-full"
+              style={{
+                background:
+                  game.winnerTeam != null
+                    ? WIN_TEAM_COLOR[game.winnerTeam]
+                    : "var(--color-ink-soft)",
+              }}
+            />
+            {game.winnerTeam == null
+              ? "Game ended"
+              : me?.team === game.winnerTeam
+                ? "You won!"
+                : `${WIN_TEAM_LABEL[game.winnerTeam] ?? `Team ${game.winnerTeam}`} wins`}
+          </span>
+          {resultsDismissed && (
+            <button
+              type="button"
+              onClick={() => setResultsDismissed(false)}
+              className="rounded-full border border-line bg-surface px-3 py-1 text-[12px] font-semibold text-ink transition-colors hover:bg-canvas"
+            >
+              Show results
+            </button>
+          )}
         </div>
       ) : (
         <div className="mb-3">

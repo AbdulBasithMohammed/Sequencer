@@ -49,11 +49,13 @@ export function WinScreen({
   players,
   roomId,
   roomCode,
+  onViewBoard,
 }: {
   winnerTeam: number | null;
   players: RosterPlayer[];
   roomId: string | null;
   roomCode: string | null;
+  onViewBoard?: () => void;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -191,6 +193,16 @@ export function WinScreen({
         <div className="text-[10px] uppercase tracking-[0.15em] text-ink-soft">
           Rematch readies you up — the host starts when everyone&apos;s in.
         </div>
+      ) : null}
+
+      {onViewBoard ? (
+        <button
+          type="button"
+          onClick={onViewBoard}
+          className="text-[11px] font-semibold text-ink-soft underline-offset-4 hover:text-ink hover:underline"
+        >
+          View the final board
+        </button>
       ) : null}
     </div>
   );
