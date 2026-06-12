@@ -39,7 +39,7 @@ export function NoticeToast({ notice }: { notice: string }) {
       className="pointer-events-none fixed inset-x-0 top-5 z-50 flex justify-center px-5"
     >
       <div
-        className="pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border border-mint/50 bg-surface px-4 py-3 shadow-xl transition-all duration-500"
+        className="menu-enter pointer-events-auto flex w-full max-w-md items-start gap-3 rounded-2xl border border-mint/50 bg-surface px-4 py-3 shadow-xl transition-all duration-500"
         style={{
           opacity: visible ? 1 : 0,
           transform: visible ? "translateY(0)" : "translateY(-12px)",

@@ -105,7 +105,7 @@ export function FriendsClient({
           className="mt-2 w-full rounded-2xl border border-line bg-canvas px-4 py-3 text-[15px] text-ink outline-none focus:border-ink"
         />
         {query.trim() && (
-          <div className="mt-3 overflow-hidden rounded-2xl border border-line bg-surface">
+          <div className="menu-enter mt-3 overflow-hidden rounded-2xl border border-line bg-surface">
             {searching && results.length === 0 ? (
               <EmptyRow text="Searching…" />
             ) : results.length === 0 ? (

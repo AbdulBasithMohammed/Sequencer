@@ -30,7 +30,10 @@ export function ConnectionPill({ show }: { show: boolean }) {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-line bg-canvas px-3.5 py-1.5 text-[12px] font-semibold text-ink shadow-md"
+      // mx-auto centering (not -translate-x-1/2): card-enter animates
+      // transform, which would override a transform-based centering and
+      // make the pill jump sideways while entering.
+      className="card-enter fixed inset-x-0 bottom-4 z-50 mx-auto flex w-fit items-center gap-2 rounded-full border border-line bg-canvas px-3.5 py-1.5 text-[12px] font-semibold text-ink shadow-md"
     >
       <span
         aria-hidden

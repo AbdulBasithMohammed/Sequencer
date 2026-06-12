@@ -48,7 +48,7 @@ function InviteCard({ invite }: { invite: RoomInvite }) {
 
   return (
     <div
-      className="pointer-events-auto rounded-2xl border border-line bg-surface px-4 py-3 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)]"
+      className="card-enter pointer-events-auto rounded-2xl border border-line bg-surface px-4 py-3 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.25)]"
       style={{ borderTopWidth: 3, borderTopColor: "var(--color-pink)" }}
     >
       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-ink-soft">
