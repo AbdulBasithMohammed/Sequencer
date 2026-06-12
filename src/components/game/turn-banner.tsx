@@ -24,6 +24,33 @@ export type RosterPlayer = {
   is_bot: boolean;
 };
 
+// Chips are shown in actual play order, which is NOT seat order: the
+// engine alternates teams in canonical order (1 → 2 → [3]) while each
+// team cycles its own players by seat (see next_turn_seat in the
+// team_alternating_turn_order migration). Sorting by (rank within own
+// team, team) reproduces that sequence exactly for balanced teams, and
+// is the closest static order for unbalanced ones. The roster is fixed
+// for the whole game, so this order never changes mid-game.
+function playOrder(players: RosterPlayer[]): RosterPlayer[] {
+  const rank = new Map<string, number>();
+  const teams = new Map<number, RosterPlayer[]>();
+  for (const p of players) {
+    const t = p.team ?? 99;
+    const group = teams.get(t) ?? [];
+    group.push(p);
+    teams.set(t, group);
+  }
+  for (const group of teams.values()) {
+    group.sort((a, b) => a.seat_index - b.seat_index);
+    group.forEach((p, i) => rank.set(p.user_id, i));
+  }
+  return [...players].sort(
+    (a, b) =>
+      (rank.get(a.user_id) ?? 0) - (rank.get(b.user_id) ?? 0) ||
+      (a.team ?? 99) - (b.team ?? 99),
+  );
+}
+
 export function TurnBanner({
   players,
   turnSeat,
@@ -59,19 +86,22 @@ export function TurnBanner({
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-1.5">
-        {players.map((p) => {
+        {playOrder(players).map((p) => {
           const isActive = p.seat_index === turnSeat;
           const color =
             p.team != null ? TEAM_COLOR[p.team] : "var(--color-ink-soft)";
           return (
+            // Active state changes colors and a transform only — never
+            // font weight or size — so the row's layout is identical every
+            // turn and the chips don't shift as play advances.
             <div
               key={p.user_id}
-              className="flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] text-[11px]"
+              className="flex items-center gap-1.5 rounded-full border px-2.5 py-[3px] text-[11px] font-semibold transition-all duration-300"
               style={{
                 borderColor: isActive ? color : "var(--color-line)",
                 background: isActive ? `${color}1A` : "transparent",
                 color: isActive ? "var(--color-ink)" : "var(--color-ink-soft)",
-                fontWeight: isActive ? 700 : 500,
+                transform: isActive ? "scale(1.07)" : "none",
               }}
             >
               <span
