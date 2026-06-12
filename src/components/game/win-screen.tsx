@@ -75,7 +75,7 @@ export function WinScreen({
 
   return (
     <div
-      className="mx-auto flex max-w-[520px] flex-col items-center gap-4 rounded-2xl border border-line bg-surface px-6 py-6 text-center shadow-sm"
+      className="card-enter mx-auto flex max-w-[520px] flex-col items-center gap-4 rounded-2xl border border-line bg-surface px-6 py-6 text-center shadow-sm"
       style={{
         borderTopWidth: 4,
         borderTopColor: color,

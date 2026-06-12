@@ -26,7 +26,7 @@ export default async function GuestPage({
   if (user) redirect(safeNext);
 
   return (
-    <div className="mx-auto flex w-full max-w-[560px] flex-1 flex-col px-6 py-8 lg:px-10">
+    <div className="page-enter mx-auto flex w-full max-w-[560px] flex-1 flex-col px-6 py-8 lg:px-10">
       <header className="mb-12 flex items-center justify-between">
         <Link href="/" aria-label="Sequencr home">
           <Wordmark size={22} accent="pink" />

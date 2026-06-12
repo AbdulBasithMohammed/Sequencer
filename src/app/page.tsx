@@ -23,7 +23,7 @@ export default async function Home() {
   }
 
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden">
+    <div className="page-enter relative flex flex-1 flex-col overflow-hidden">
       <div className="mx-auto flex w-full max-w-[1280px] flex-1 flex-col px-6 lg:px-12">
         {/* Top nav */}
         <header className="flex items-center justify-between py-6">

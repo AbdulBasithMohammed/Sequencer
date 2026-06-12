@@ -19,8 +19,8 @@ export default async function RulesPage() {
     <div
       className={
         isAuthed
-          ? "mx-auto flex w-full max-w-[820px] flex-col px-8 py-8"
-          : "mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-8 lg:px-12"
+          ? "page-enter mx-auto flex w-full max-w-[820px] flex-col px-8 py-8"
+          : "page-enter mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-8 lg:px-12"
       }
     >
       {!isAuthed && (

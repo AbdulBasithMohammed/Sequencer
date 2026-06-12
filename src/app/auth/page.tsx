@@ -50,7 +50,7 @@ export default async function AuthPage({
   }
 
   return (
-    <div className="grid flex-1 grid-cols-1 lg:grid-cols-2">
+    <div className="page-enter grid flex-1 grid-cols-1 lg:grid-cols-2">
       {/* Left: decorative gradient panel */}
       <aside
         className="relative hidden items-center justify-center overflow-hidden lg:flex"

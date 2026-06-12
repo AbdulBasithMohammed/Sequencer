@@ -33,7 +33,7 @@ export default async function GamePage({
   if (!snapshot) redirect("/play");
 
   return (
-    <div className="mx-auto flex w-full max-w-[1240px] flex-1 flex-col px-6 py-6 lg:px-10">
+    <div className="page-enter mx-auto flex w-full max-w-[1240px] flex-1 flex-col px-6 py-6 lg:px-10">
       <header className="mb-6 flex items-center justify-between">
         <Link href="/" aria-label="Sequencr home">
           <Wordmark size={22} accent="pink" />

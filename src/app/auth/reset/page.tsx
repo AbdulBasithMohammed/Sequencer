@@ -19,7 +19,7 @@ export default async function ResetPage() {
   if (!user) redirect("/auth?error=reset_link_expired");
 
   return (
-    <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6 py-10">
+    <div className="page-enter mx-auto flex w-full max-w-[440px] flex-1 flex-col px-6 py-10">
       <header className="mb-12">
         <Link href="/" aria-label="Sequencr home">
           <Wordmark size={24} accent="pink" />
