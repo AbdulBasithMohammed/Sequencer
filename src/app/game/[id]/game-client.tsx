@@ -461,7 +461,13 @@ export function GameClient({
         // dismissed, the strip carries the Rematch / Exit actions so you
         // can act without reopening the overlay.
         <div className="mb-3 flex min-h-[34px] flex-wrap items-center justify-center gap-x-3 gap-y-2">
-          <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-ink">
+          {/* The result itself is the way back into the win window. */}
+          <button
+            type="button"
+            onClick={() => setResultsDismissed(false)}
+            title="Show results"
+            className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-1.5 text-[13px] font-semibold text-ink shadow-sm transition-colors hover:bg-canvas"
+          >
             <span
               aria-hidden
               className="inline-block size-2.5 rounded-full"
@@ -477,7 +483,7 @@ export function GameClient({
               : me?.team === game.winnerTeam
                 ? "You won!"
                 : `${WIN_TEAM_LABEL[game.winnerTeam] ?? `Team ${game.winnerTeam}`} wins`}
-          </span>
+          </button>
           {resultsDismissed && (
             <RematchActions
               roomId={initialSnapshot.roomId}
