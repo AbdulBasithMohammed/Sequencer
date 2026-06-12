@@ -15,6 +15,7 @@ A free, browser-native implementation of Jax's Sequence card-and-board game. 2�
 - **Server-authoritative rules engine** — Postgres functions enforce every game rule; clients can't cheat by tampering with state
 - **Full Sequence ruleset** — two-eyed jacks, one-eyed jacks, dead-card swap, corner wilds, shared-chip sequences, deck refill
 - **Friends, invites & notifications** — Discord-style `Name #TAG`, friend requests with ignore lists, room invites that pop up as toasts in real-time
+- **Bot opponents** — fill empty seats with Rookie / Medium / Ace bots; pure PL/pgSQL heuristics (offense, defense, jack discipline, 1-ply anticipation) running through the same server-authoritative path as humans
 - **Per-turn timer** — server-enforced via `pg_cron`; AFK players auto-discard so games don't stall
 - **Mobile-first responsive layout** — hamburger nav, landscape-rotated board, tap-friendly hand
 - **Storage hygiene** — finished games auto-delete after 5 minutes, stale guest accounts after 24 hours
@@ -25,7 +26,7 @@ A free, browser-native implementation of Jax's Sequence card-and-board game. 2�
 
 | Layer | Choice |
 |---|---|
-| **Framework** | [Next.js 15](https://nextjs.org) (App Router, Turbopack, React Server Components, Server Actions) |
+| **Framework** | [Next.js 16](https://nextjs.org) (App Router, Turbopack, React Server Components, Server Actions) |
 | **Styling** | [Tailwind v4](https://tailwindcss.com) |
 | **Database** | [Supabase Postgres](https://supabase.com) + Row-Level Security |
 | **Auth** | Supabase Auth (email/password + anonymous sign-ins for guests) |
@@ -58,7 +59,7 @@ Postgres triggers call `realtime.send(channel, event, payload)` on every meaning
 | `friends:<user_id>` | Friend request / friendship / ignore changes |
 | `invites:<user_id>` | Room invite arrivals |
 
-Payloads carry just a version number — clients refetch authoritative state via RLS-filtered SELECT. No giant state objects flying over the wire.
+Lobby and game payloads carry the full **public** projection of the row (board, turn, roster — never hands or the deck), and clients apply them straight to local state: a turn lands in one realtime hop with no server round trip. Snapshot RPCs (`get_game_snapshot` / `get_lobby_snapshot`) self-heal missed events on refocus, version gaps, regained network, and a turn-deadline backstop. Friends/invites channels carry only a ping; those clients refetch via RLS-filtered reads.
 
 ### Append-only move log
 
@@ -69,6 +70,7 @@ Payloads carry just a version number — clients refetch authoritative state via
 | Job | Schedule | Purpose |
 |---|---|---|
 | `sequence-tick-turns` | every 5s | Detect expired `turn_deadline`s and auto-discard for AFK players |
+| `sequence-tick-bots` | every 2s | Let bots whose think-delay elapsed take their turn |
 | `sequence-stale-cleanup` | every 5 min | Mark games inactive 30+ minutes as `finished` |
 | `sequence-delete-finished` | every 5 min | Delete `finished` games + their move logs after 5 min |
 | `sequence-delete-stale-guests` | every hour | Delete anonymous `auth.users` inactive 24+ hours |
