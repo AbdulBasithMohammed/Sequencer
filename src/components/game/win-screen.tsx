@@ -18,6 +18,32 @@ const TEAM_LABEL: Record<number, string> = {
   3: "Mint",
 };
 
+// Falling card suits behind the win card — pure CSS, fires once.
+// left as %, size in px, fall distance / spin via CSS vars.
+const CONFETTI: Array<{
+  left: number;
+  size: number;
+  delay: number;
+  dur: number;
+  fall: number;
+  spin: number;
+  glyph: string;
+  color: string;
+}> = [
+  { left: 4, size: 18, delay: 80, dur: 1500, fall: 170, spin: 260, glyph: "♥", color: "var(--color-pink)" },
+  { left: 12, size: 14, delay: 320, dur: 1700, fall: 200, spin: -200, glyph: "♣", color: "var(--color-mint)" },
+  { left: 20, size: 20, delay: 0, dur: 1400, fall: 150, spin: 180, glyph: "♦", color: "var(--color-blue)" },
+  { left: 29, size: 13, delay: 480, dur: 1800, fall: 220, spin: -280, glyph: "♠", color: "var(--color-ink)" },
+  { left: 37, size: 17, delay: 160, dur: 1500, fall: 180, spin: 240, glyph: "♥", color: "var(--color-butter)" },
+  { left: 46, size: 15, delay: 560, dur: 1600, fall: 160, spin: -180, glyph: "♦", color: "var(--color-pink)" },
+  { left: 54, size: 19, delay: 240, dur: 1450, fall: 190, spin: 200, glyph: "♣", color: "var(--color-blue)" },
+  { left: 63, size: 14, delay: 640, dur: 1750, fall: 210, spin: -240, glyph: "♥", color: "var(--color-mint)" },
+  { left: 71, size: 16, delay: 40, dur: 1550, fall: 170, spin: 220, glyph: "♠", color: "var(--color-butter)" },
+  { left: 79, size: 13, delay: 400, dur: 1650, fall: 200, spin: -160, glyph: "♦", color: "var(--color-mint)" },
+  { left: 87, size: 18, delay: 200, dur: 1500, fall: 160, spin: 280, glyph: "♣", color: "var(--color-pink)" },
+  { left: 94, size: 15, delay: 520, dur: 1700, fall: 190, spin: -220, glyph: "♥", color: "var(--color-blue)" },
+];
+
 export function WinScreen({
   winnerTeam,
   players,
@@ -75,12 +101,33 @@ export function WinScreen({
 
   return (
     <div
-      className="card-enter mx-auto flex max-w-[520px] flex-col items-center gap-4 rounded-2xl border border-line bg-surface px-6 py-6 text-center shadow-sm"
+      className="win-enter relative mx-auto flex max-w-[520px] flex-col items-center gap-4 rounded-2xl border border-line bg-surface px-6 py-6 text-center shadow-sm"
       style={{
         borderTopWidth: 4,
         borderTopColor: color,
       }}
     >
+      {!noWinner && (
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0">
+          {CONFETTI.map((c, i) => (
+            <span
+              key={i}
+              className="absolute leading-none"
+              style={{
+                left: `${c.left}%`,
+                top: -12,
+                fontSize: c.size,
+                color: c.color,
+                ["--fall" as string]: `${c.fall}px`,
+                ["--spin" as string]: `${c.spin}deg`,
+                animation: `suit-fall ${c.dur}ms ${c.delay}ms ease-in both`,
+              }}
+            >
+              {c.glyph}
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-2.5">
         <span
           className="inline-block size-3 rounded-full"

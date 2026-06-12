@@ -105,7 +105,7 @@ export function AppSidebar({
           </button>
         </header>
         {open && (
-          <div className="menu-enter flex flex-col gap-2 border-b border-line bg-canvas p-5">
+          <div className="menu-enter stagger-children flex flex-col gap-2 border-b border-line bg-canvas p-5">
             {navLinks}
             {coffeeLink}
             <div className="mt-2">{userCard}</div>

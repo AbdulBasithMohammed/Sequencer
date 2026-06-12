@@ -56,7 +56,7 @@ export default async function Home() {
         {/* Hero */}
         <main className="grid flex-1 grid-cols-1 items-center gap-10 py-6 lg:grid-cols-[1.1fr_1fr]">
           {/* Left column */}
-          <div>
+          <div className="stagger-children">
             <SoftPill>
               <span
                 aria-hidden

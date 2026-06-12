@@ -121,7 +121,7 @@ export default async function LobbyPage({
 
   return (
     <div
-      className={`page-enter mx-auto flex w-full ${maxWidthClass} flex-1 flex-col px-6 py-7 lg:px-10`}
+      className={`page-enter stagger-children mx-auto flex w-full ${maxWidthClass} flex-1 flex-col px-6 py-7 lg:px-10`}
     >
       <header className="mb-10 flex items-center justify-between">
         <Link href="/" aria-label="Sequencr home">

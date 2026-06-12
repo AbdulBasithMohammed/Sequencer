@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useTransition } from "react";
+import { useEffect, useOptimistic, useState, useTransition } from "react";
 import {
   DndContext,
   type DragEndEvent,
@@ -47,6 +47,9 @@ export type Player = {
   is_bot: boolean;
   bot_difficulty: string | null;
 };
+
+// Player plus a transient render-only flag while its exit animates.
+type RosterCardPlayer = Player & { leaving?: boolean };
 
 export type Ban = {
   user_id: string;
@@ -165,6 +168,35 @@ export function LobbyClient({
     (state: Room, patch: Partial<Room>): Room => ({ ...state, ...patch }),
   );
   const [, startTransition] = useTransition();
+
+  // Exit ghosts: when a player disappears from the roster (kick, leave,
+  // remove-bot), keep a non-interactive copy mounted briefly so the card
+  // can animate out instead of vanishing. Guarded render-time adjustment
+  // (React's "derive state from props" pattern); the timeout sweeps the
+  // ghosts after the pop-out animation finishes.
+  const [prevRoster, setPrevRoster] = useState(optimisticPlayers);
+  const [ghosts, setGhosts] = useState<Player[]>([]);
+  if (optimisticPlayers !== prevRoster) {
+    setPrevRoster(optimisticPlayers);
+    const ids = new Set(optimisticPlayers.map((p) => p.user_id));
+    const gone = prevRoster.filter(
+      (p) =>
+        !ids.has(p.user_id) && !ghosts.some((g) => g.user_id === p.user_id),
+    );
+    if (gone.length > 0) setGhosts((g) => [...g, ...gone]);
+  }
+  useEffect(() => {
+    if (ghosts.length === 0) return;
+    const t = window.setTimeout(() => setGhosts([]), 300);
+    return () => window.clearTimeout(t);
+  }, [ghosts]);
+
+  const rosterWithGhosts: RosterCardPlayer[] = [
+    ...optimisticPlayers,
+    ...ghosts
+      .filter((g) => !optimisticPlayers.some((p) => p.user_id === g.user_id))
+      .map((g) => ({ ...g, leaving: true })),
+  ];
 
   const meIsHost = optimisticRoom.host_id === currentUserId;
   const layoutTeams = teamsForLayout(optimisticRoom.team_layout);
@@ -406,7 +438,7 @@ export function LobbyClient({
             <TeamZone
               key={team}
               team={team}
-              players={optimisticPlayers
+              players={rosterWithGhosts
                 .filter((p) => p.team === team)
                 .sort((a, b) => a.seat_index - b.seat_index)}
               capacity={teamCapacity}
@@ -632,7 +664,7 @@ function TeamZone({
   onSetBotDifficulty,
 }: {
   team: number;
-  players: Player[];
+  players: RosterCardPlayer[];
   capacity: number;
   currentUserId: string;
   hostId: string;
@@ -703,7 +735,7 @@ function DraggablePlayerCard({
   onRemoveBot,
   onSetBotDifficulty,
 }: {
-  player: Player;
+  player: RosterCardPlayer;
   isHost: boolean;
   isYou: boolean;
   meIsHost: boolean;
@@ -756,7 +788,7 @@ function DraggablePlayerCard({
         ...dragStyle,
         zIndex: isDragging ? 50 : undefined,
       }}
-      className={`rounded-xl border bg-surface p-3 transition-colors ${
+      className={`${player.leaving ? "pop-out" : "pop-in"} rounded-xl border bg-surface p-3 transition-colors ${
         isSwapOver && !isDragging
           ? "border-ink ring-2 ring-ink/20"
           : "border-line"

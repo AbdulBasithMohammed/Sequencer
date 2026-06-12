@@ -21,7 +21,7 @@ export default async function PlayPage({
   const greetingName = profile?.display_name ?? "there";
 
   return (
-    <div className="px-8 py-7">
+    <div className="stagger-children px-8 py-7">
       {(banned || kicked) && (
         <KickBanToast banned={banned} kicked={kicked} />
       )}

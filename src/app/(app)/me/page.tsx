@@ -15,7 +15,7 @@ export default async function MePage() {
   const tag = profile?.tag ?? "";
 
   return (
-    <div className="mx-auto flex w-full max-w-[760px] flex-col px-8 py-8">
+    <div className="stagger-children mx-auto flex w-full max-w-[760px] flex-col px-8 py-8">
       <h1
         className="font-display font-bold leading-none"
         style={{

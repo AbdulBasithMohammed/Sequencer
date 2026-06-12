@@ -29,6 +29,8 @@ const HOVER_LIFT = 20;
 const HOVER_SCALE = 1.16;
 const BURN_DURATION_MS = 540;
 const DEAL_DURATION_MS = 520;
+// Opening deal: every card flies in off the deck, one after another.
+const BOOT_DEAL_STAGGER_MS = 90;
 
 // Hand-tuned ember positions inside the card. Each one flies upward with
 // a slight horizontal drift, scales down, and fades — small visual cue
@@ -65,8 +67,17 @@ export function HandStrip({
   const [hovered, setHovered] = useState<number | null>(null);
   const [dealIdx, setDealIdx] = useState<number | null>(null);
   const [scale, setScale] = useState(1);
+  // True while the opening deal plays: all cards animate in, staggered.
+  const [bootDealing, setBootDealing] = useState(true);
   const prevCardsRef = useRef<string[] | null>(null);
   const sizerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const total =
+      cards.length * BOOT_DEAL_STAGGER_MS + DEAL_DURATION_MS + 100;
+    const t = window.setTimeout(() => setBootDealing(false), total);
+    return () => window.clearTimeout(t);
+  }, [cards.length]);
 
   // Natural fan width (cards at full size) must fit the available *layout*
   // width — measured from a parent box, not the viewport. Using
@@ -198,7 +209,9 @@ export function HandStrip({
             ? `card-burn ${BURN_DURATION_MS}ms ease-in forwards`
             : isDealing
               ? `card-deal ${DEAL_DURATION_MS}ms cubic-bezier(0.25, 1.3, 0.4, 1) both`
-              : undefined;
+              : bootDealing
+                ? `card-deal ${DEAL_DURATION_MS}ms ${i * BOOT_DEAL_STAGGER_MS}ms cubic-bezier(0.25, 1.3, 0.4, 1) both`
+                : undefined;
 
           return (
             <div

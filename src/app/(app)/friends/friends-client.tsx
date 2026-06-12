@@ -66,7 +66,7 @@ export function FriendsClient({
   }, [query]);
 
   return (
-    <div className="mx-auto flex w-full max-w-[760px] flex-col px-8 py-8">
+    <div className="stagger-children mx-auto flex w-full max-w-[760px] flex-col px-8 py-8">
       <div className="text-[13px] font-semibold text-ink-soft">Friends</div>
       <h1
         className="mt-1 font-display font-bold leading-none"
