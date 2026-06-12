@@ -564,9 +564,11 @@ function RoomSettings({
   onSetTurnSeconds: (seconds: number) => void;
   onSetTargetSequences: (n: number | null) => void;
 }) {
-  // 3 teams always need exactly 1 sequence; hide the picker entirely.
-  const showSeqPicker = layoutTeams.length === 2;
-  const defaultSeq = layoutTeams.length === 3 ? 1 : 2;
+  // 3 teams always play to exactly 1 sequence. Keep the picker MOUNTED
+  // but locked — unmounting it re-centered the row and made the other
+  // pickers jump when switching layouts.
+  const threeTeams = layoutTeams.length === 3;
+  const defaultSeq = threeTeams ? 1 : 2;
   const effectiveSeq = room.target_sequences ?? defaultSeq;
 
   return (
@@ -590,18 +592,18 @@ function RoomSettings({
         onChange={(v) => onSetTurnSeconds(Number(v))}
         disabled={!meIsHost}
       />
-      {showSeqPicker && (
-        <SettingPicker
-          label="Win at"
-          options={[
-            { label: "1 seq", value: 1 },
-            { label: "2 seqs", value: 2 },
-          ]}
-          value={effectiveSeq}
-          onChange={(v) => onSetTargetSequences(Number(v))}
-          disabled={!meIsHost}
-        />
-      )}
+      <SettingPicker
+        label="Win at"
+        options={[
+          { label: "1 seq", value: 1 },
+          { label: "2 seqs", value: 2 },
+        ]}
+        value={threeTeams ? 1 : effectiveSeq}
+        onChange={(v) => onSetTargetSequences(Number(v))}
+        disabled={!meIsHost}
+        locked={threeTeams}
+        lockedTitle="Three-team games always play to 1 sequence"
+      />
     </div>
   );
 }
@@ -612,13 +614,41 @@ function SettingPicker<T extends string | number>({
   value,
   onChange,
   disabled,
+  locked,
+  lockedTitle,
 }: {
   label: string;
   options: { label: string; value: T }[];
   value: T;
   onChange: (v: T) => void;
   disabled: boolean;
+  // Locked: rule-pinned. All options stay visible (stable width) but inert.
+  locked?: boolean;
+  lockedTitle?: string;
 }) {
+  if (locked) {
+    return (
+      <div className="inline-flex items-center gap-2" title={lockedTitle}>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft">
+          {label}
+        </span>
+        <div className="inline-flex items-center gap-0.5 rounded-xl border border-line bg-surface p-0.5 opacity-60">
+          {options.map((opt) => (
+            <span
+              key={String(opt.value)}
+              className={`rounded-[10px] px-2.5 py-1 text-[12px] font-semibold ${
+                value === opt.value
+                  ? "bg-ink text-canvas"
+                  : "text-ink-soft"
+              }`}
+            >
+              {opt.label}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="inline-flex items-center gap-2">
       <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft">
@@ -688,7 +718,7 @@ function TeamZone({
   return (
     <div
       ref={setNodeRef}
-      className={`flex flex-col gap-2 rounded-2xl border-[1.5px] bg-canvas/40 p-3 transition-colors ${
+      className={`pop-in flex flex-col gap-2 rounded-2xl border-[1.5px] bg-canvas/40 p-3 transition-colors ${
         isOver ? "border-ink bg-canvas" : "border-line"
       }`}
     >
