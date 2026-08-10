@@ -27,14 +27,6 @@ type Overview = {
   players_seated: number;
 };
 
-type RecentUser = {
-  display_name: string;
-  tag: string | null;
-  is_guest: boolean;
-  is_bot: boolean;
-  created_at: string;
-};
-
 type ActiveRoom = {
   code: string;
   status: string;
@@ -58,11 +50,8 @@ type UserRow = {
   last_sign_in_at: string | null;
 };
 
-type SignupDay = {
-  day: string;
-  registered: number;
-  guests: number;
-};
+type SignupDay = { day: string; registered: number; guests: number };
+type GameDay = { day: string; completed: number };
 
 type GameTotals = {
   completed_total: number;
@@ -72,16 +61,6 @@ type GameTotals = {
   games_with_bots: number;
 };
 
-type RecentGame = {
-  room_code: string | null;
-  player_count: number;
-  human_count: number;
-  bot_count: number;
-  winner_team: number | null;
-  duration_seconds: number | null;
-  finished_at: string;
-};
-
 function duration(secs: number | null) {
   if (!secs || secs < 0) return "—";
   const m = Math.floor(secs / 60);
@@ -89,13 +68,14 @@ function duration(secs: number | null) {
   return m ? `${m}m ${s}s` : `${s}s`;
 }
 
-const RANGES = [6, 24, 72, 168];
+function shortDay(iso: string) {
+  return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
 
-export default async function AdminPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ hours?: string }>;
-}) {
+export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -106,309 +86,322 @@ export default async function AdminPage({
   const { data: isAdmin } = await supabase.rpc("current_user_is_admin");
   if (!isAdmin) notFound();
 
-  const params = await searchParams;
-  const hours = RANGES.includes(Number(params.hours)) ? Number(params.hours) : 24;
+  const [overviewRes, roomsRes, usersRes, signupsRes, totalsRes, gamesRes] =
+    await Promise.all([
+      supabase.rpc("admin_overview"),
+      supabase.rpc("admin_active_rooms"),
+      supabase.rpc("admin_user_list", { p_limit: 200 }),
+      supabase.rpc("admin_signups_by_day", { p_days: 14 }),
+      supabase.rpc("admin_game_totals"),
+      supabase.rpc("admin_games_by_day", { p_days: 14 }),
+    ]);
 
-  const [
-    overviewRes,
-    usersRes,
-    roomsRes,
-    allUsersRes,
-    signupsRes,
-    gameTotalsRes,
-    recentGamesRes,
-  ] = await Promise.all([
-    supabase.rpc("admin_overview"),
-    supabase.rpc("admin_recent_users", { p_hours: hours }),
-    supabase.rpc("admin_active_rooms"),
-    supabase.rpc("admin_user_list", { p_limit: 200 }),
-    supabase.rpc("admin_signups_by_day", { p_days: 14 }),
-    supabase.rpc("admin_game_totals"),
-    supabase.rpc("admin_recent_games", { p_limit: 50 }),
-  ]);
-
-  const overview = (overviewRes.data?.[0] ?? null) as Overview | null;
-  const recentUsers = (usersRes.data ?? []) as RecentUser[];
+  const o = (overviewRes.data?.[0] ?? null) as Overview | null;
   const rooms = (roomsRes.data ?? []) as ActiveRoom[];
-  const allUsers = (allUsersRes.data ?? []) as UserRow[];
+  const users = (usersRes.data ?? []) as UserRow[];
   const signups = (signupsRes.data ?? []) as SignupDay[];
-  const gameTotals = (gameTotalsRes.data?.[0] ?? null) as GameTotals | null;
-  const recentGames = (recentGamesRes.data ?? []) as RecentGame[];
+  const totals = (totalsRes.data?.[0] ?? null) as GameTotals | null;
+  const games = (gamesRes.data ?? []) as GameDay[];
+
+  const liveRooms = rooms.filter((r) => r.has_live_game).length;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1000px] flex-col px-8 py-8">
-      <h1
-        className="font-display font-bold leading-none"
-        style={{ fontSize: "clamp(32px, 4vw, 44px)", letterSpacing: "-0.03em" }}
-      >
-        Admin
-      </h1>
-      <p className="mt-2 text-sm text-ink-soft">
-        Live snapshot · {new Date().toLocaleString()}
-      </p>
-
-      {overview ? (
-        <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          <Stat label="Total users" value={overview.total_users} />
-          <Stat label="Registered" value={overview.registered_users} />
-          <Stat label="Guests" value={overview.guest_users} />
-          <Stat label="Bots" value={overview.bot_users} />
-          <Stat label="New · 24h" value={overview.new_24h} accent />
-          <Stat label="New · 7d" value={overview.new_7d} accent />
-          <Stat label="Playing now" value={overview.games_in_progress} accent />
-          <Stat label="Seated players" value={overview.players_seated} />
-          <Stat label="Rooms" value={overview.rooms_total} />
-          <Stat label="Waiting" value={overview.rooms_waiting} />
-          <Stat label="In game" value={overview.rooms_in_game} />
-        </div>
-      ) : (
-        <Empty>Could not load overview.</Empty>
-      )}
-
-      <SectionHeading>
-        New users
-        <span className="ml-3 inline-flex gap-1 align-middle">
-          {RANGES.map((h) => (
-            <a
-              key={h}
-              href={`/admin?hours=${h}`}
-              className={`rounded-full border px-2.5 py-1 text-xs ${
-                h === hours
-                  ? "border-line bg-ink text-canvas"
-                  : "border-line text-ink-soft hover:text-ink"
-              }`}
-            >
-              {h < 24 ? `${h}h` : `${h / 24}d`}
-            </a>
-          ))}
-        </span>
-      </SectionHeading>
-
-      {recentUsers.length ? (
-        <Table headers={["Name", "Type", "Joined"]}>
-          {recentUsers.map((u, i) => (
-            <tr key={`${u.tag ?? u.display_name}-${i}`} className="border-t border-line">
-              <Td>
-                {u.display_name}
-                {u.tag ? (
-                  <span className="ml-1.5 font-mono text-ink-soft">#{u.tag}</span>
-                ) : null}
-              </Td>
-              <Td>{u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}</Td>
-              <Td>{new Date(u.created_at).toLocaleString()}</Td>
-            </tr>
-          ))}
-        </Table>
-      ) : (
-        <Empty>No signups in the last {hours < 24 ? `${hours}h` : `${hours / 24}d`}.</Empty>
-      )}
-
-      <SectionHeading>Live rooms</SectionHeading>
-
-      {rooms.length ? (
-        <Table headers={["Code", "Host", "Seats", "Status", "Last activity"]}>
-          {rooms.map((r) => (
-            <tr key={r.code} className="border-t border-line">
-              <Td>
-                <span className="font-mono">{r.code}</span>
-              </Td>
-              <Td>{r.host_name}</Td>
-              <Td>
-                {r.seats_taken}/{r.capacity}
-              </Td>
-              <Td>{r.has_live_game ? "Playing" : r.status}</Td>
-              <Td>{new Date(r.last_activity_at).toLocaleString()}</Td>
-            </tr>
-          ))}
-        </Table>
-      ) : (
-        <Empty>No rooms right now.</Empty>
-      )}
-
-      <SectionHeading>Completed games</SectionHeading>
-
-      {gameTotals ? (
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          <Stat label="Completed · all time" value={gameTotals.completed_total} />
-          <Stat label="Completed · 24h" value={gameTotals.completed_24h} />
-          <Stat label="Completed · 7d" value={gameTotals.completed_7d} />
-          <Stat label="With bots" value={gameTotals.games_with_bots} />
-          <div className="rounded-2xl border border-line bg-surface px-4 py-3">
-            <div className="text-xs text-ink-soft">Avg length</div>
-            <div
-              className="mt-1 font-display font-bold text-ink"
-              style={{ fontSize: "28px", letterSpacing: "-0.02em" }}
-            >
-              {duration(gameTotals.avg_duration_secs)}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {recentGames.length ? (
-        <Table
-          headers={["Room", "Players", "Bots", "Winner", "Length", "Finished"]}
+    <div className="mx-auto flex w-full max-w-[1100px] flex-col px-6 py-8 sm:px-8">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h1
+          className="font-display font-bold leading-none"
+          style={{ fontSize: "clamp(30px, 4vw, 40px)", letterSpacing: "-0.03em" }}
         >
-          {recentGames.map((g, i) => (
-            <tr key={`${g.room_code}-${i}`} className="border-t border-line">
-              <Td>
-                <span className="font-mono">{g.room_code ?? "—"}</span>
-              </Td>
-              <Td>{g.human_count}</Td>
-              <Td>{g.bot_count || "—"}</Td>
-              <Td>{g.winner_team !== null ? `Team ${g.winner_team}` : "—"}</Td>
-              <Td>{duration(g.duration_seconds)}</Td>
-              <Td>{new Date(g.finished_at).toLocaleString()}</Td>
-            </tr>
-          ))}
-        </Table>
-      ) : (
-        <Empty>
-          No completed games recorded yet. Tracking starts from the deploy that
-          added this table — games finished before then were deleted by the
-          cleanup cron and cannot be recovered.
-        </Empty>
+          Admin
+        </h1>
+        <span className="text-xs text-ink-soft">
+          {new Date().toLocaleString()}
+        </span>
+      </div>
+
+      {/* The four numbers worth knowing at a glance. */}
+      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Kpi label="Players" value={o?.total_users ?? 0} sub={`${o?.registered_users ?? 0} registered`} />
+        <Kpi label="New today" value={o?.new_24h ?? 0} sub={`${o?.new_7d ?? 0} this week`} />
+        <Kpi label="Playing now" value={o?.games_in_progress ?? 0} sub={`${liveRooms} live room${liveRooms === 1 ? "" : "s"}`} />
+        <Kpi
+          label="Games finished"
+          value={totals?.completed_total ?? 0}
+          sub={
+            totals?.completed_total
+              ? `avg ${duration(totals.avg_duration_secs)}`
+              : "none yet"
+          }
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card title="Who's signed up">
+          <MiniRow label="Registered" value={o?.registered_users ?? 0} of={o?.total_users ?? 0} />
+          <MiniRow label="Guests" value={o?.guest_users ?? 0} of={o?.total_users ?? 0} />
+          <MiniRow label="Bots" value={o?.bot_users ?? 0} of={o?.total_users ?? 0} />
+        </Card>
+
+        <Card title="Rooms right now">
+          <MiniRow label="Waiting in lobby" value={o?.rooms_waiting ?? 0} of={o?.rooms_total ?? 0} />
+          <MiniRow label="In game" value={o?.rooms_in_game ?? 0} of={o?.rooms_total ?? 0} />
+          <MiniRow label="Seated players" value={o?.players_seated ?? 0} of={o?.players_seated ?? 0} />
+        </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card title="Signups · 14 days">
+          <Bars
+            rows={signups.map((d) => ({
+              day: d.day,
+              value: d.registered + d.guests,
+              note:
+                d.guests > 0 ? `${d.registered} + ${d.guests} guest` : undefined,
+            }))}
+            empty="No signups in the last 14 days."
+          />
+        </Card>
+
+        <Card title="Games finished · 14 days">
+          <Bars
+            rows={games.map((d) => ({ day: d.day, value: d.completed }))}
+            empty="Nothing recorded yet — tracking started today. Games finished before that were deleted by the cleanup cron."
+          />
+        </Card>
+      </div>
+
+      {rooms.length > 0 && (
+        <Card title={`Live rooms · ${rooms.length}`} className="mt-4">
+          <div className="-mx-4 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="text-xs text-ink-soft">
+                  <Th>Code</Th>
+                  <Th>Host</Th>
+                  <Th>Seats</Th>
+                  <Th>Status</Th>
+                  <Th>Last activity</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {rooms.slice(0, 12).map((r) => (
+                  <tr key={r.code} className="border-t border-line">
+                    <Td>
+                      <span className="font-mono">{r.code}</span>
+                    </Td>
+                    <Td>{r.host_name}</Td>
+                    <Td>
+                      {r.seats_taken}/{r.capacity}
+                    </Td>
+                    <Td>
+                      <Badge live={r.has_live_game}>
+                        {r.has_live_game ? "Playing" : r.status}
+                      </Badge>
+                    </Td>
+                    <Td className="text-ink-soft">
+                      {new Date(r.last_activity_at).toLocaleTimeString()}
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
-      <SectionHeading>Signups · last 14 days</SectionHeading>
-
-      {signups.some((d) => d.registered + d.guests > 0) ? (
-        <Table headers={["Day", "Registered", "Guests", ""]}>
-          {signups.map((d) => {
-            const peak = Math.max(
-              ...signups.map((x) => x.registered + x.guests),
-              1,
-            );
-            const total = d.registered + d.guests;
-            return (
-              <tr key={d.day} className="border-t border-line">
-                <Td>{d.day}</Td>
-                <Td>{d.registered}</Td>
-                <Td>{d.guests}</Td>
-                <td className="w-1/2 px-4 py-3">
-                  <div
-                    className="h-2 rounded-full bg-ink"
-                    style={{ width: `${(total / peak) * 100}%`, minWidth: total ? "4px" : "0" }}
-                  />
-                </td>
+      {/* Collapsed by default — this is the long one, and it's reference
+          material rather than something you scan every visit. */}
+      <details className="group mt-4 rounded-3xl border border-line bg-surface">
+        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium">
+          All users · {users.length}
+          <span className="ml-2 text-ink-soft group-open:hidden">show</span>
+          <span className="ml-2 hidden text-ink-soft group-open:inline">hide</span>
+        </summary>
+        <div className="overflow-x-auto border-t border-line">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="text-xs text-ink-soft">
+                <Th>Name</Th>
+                <Th>Email</Th>
+                <Th>Type</Th>
+                <Th>Joined</Th>
+                <Th>Last seen</Th>
               </tr>
-            );
-          })}
-        </Table>
-      ) : (
-        <Empty>No signups in the last 14 days.</Empty>
-      )}
+            </thead>
+            <tbody>
+              {users.map((u, i) => (
+                <tr key={`${u.tag ?? u.display_name}-${i}`} className="border-t border-line">
+                  <Td>
+                    {u.display_name}
+                    {u.tag ? (
+                      <span className="ml-1.5 font-mono text-xs text-ink-soft">
+                        #{u.tag}
+                      </span>
+                    ) : null}
+                    {u.is_admin ? <Badge live>admin</Badge> : null}
+                  </Td>
+                  <Td className="font-mono text-xs">{u.email ?? "—"}</Td>
+                  <Td>{u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}</Td>
+                  <Td className="text-ink-soft">
+                    {new Date(u.created_at).toLocaleDateString()}
+                  </Td>
+                  <Td className="text-ink-soft">
+                    {u.last_sign_in_at
+                      ? new Date(u.last_sign_in_at).toLocaleDateString()
+                      : "—"}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
 
-      <SectionHeading>All users</SectionHeading>
-
-      {allUsers.length ? (
-        <Table headers={["Name", "Email", "Type", "Joined", "Last seen"]}>
-          {allUsers.map((u, i) => (
-            <tr key={`${u.tag ?? u.display_name}-${i}`} className="border-t border-line">
-              <Td>
-                {u.display_name}
-                {u.tag ? (
-                  <span className="ml-1.5 font-mono text-ink-soft">#{u.tag}</span>
-                ) : null}
-                {u.is_admin ? (
-                  <span className="ml-2 rounded-full border border-line px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-soft">
-                    admin
-                  </span>
-                ) : null}
-              </Td>
-              <Td>
-                <span className="font-mono text-xs">{u.email ?? "—"}</span>
-              </Td>
-              <Td>{u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}</Td>
-              <Td>{new Date(u.created_at).toLocaleDateString()}</Td>
-              <Td>
-                {u.last_sign_in_at
-                  ? new Date(u.last_sign_in_at).toLocaleString()
-                  : "—"}
-              </Td>
-            </tr>
-          ))}
-        </Table>
-      ) : (
-        <Empty>No users.</Empty>
-      )}
-
-      <p className="mt-10 text-xs leading-relaxed text-ink-soft">
-        Finished games are deleted 5 minutes after they end by the
-        sequence-delete-finished cron, so this page is a live snapshot only —
-        it cannot show historical games. Guest accounts disappear 24 hours
-        after their last sign-in.
+      <p className="mt-8 text-xs leading-relaxed text-ink-soft">
+        Rooms and games are a live snapshot — finished games are deleted 5
+        minutes after they end, and guests disappear 24 hours after their last
+        sign-in. Only the daily completed-game counter is durable.
       </p>
     </div>
   );
 }
 
-function Stat({
+function Kpi({
   label,
   value,
-  accent,
+  sub,
 }: {
   label: string;
   value: number;
-  accent?: boolean;
+  sub?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-line bg-surface px-4 py-3">
+    <div className="rounded-2xl border border-line bg-surface px-4 py-4">
       <div className="text-xs text-ink-soft">{label}</div>
       <div
-        className={`mt-1 font-display font-bold ${accent ? "text-ink" : "text-ink"}`}
-        style={{ fontSize: "28px", letterSpacing: "-0.02em" }}
+        className="mt-1 font-display font-bold leading-none"
+        style={{ fontSize: "34px", letterSpacing: "-0.03em" }}
       >
         {value}
       </div>
+      {sub ? <div className="mt-1.5 text-xs text-ink-soft">{sub}</div> : null}
     </div>
   );
 }
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return (
-    <h2
-      className="mt-10 font-display font-bold leading-none"
-      style={{ fontSize: "20px", letterSpacing: "-0.02em" }}
-    >
-      {children}
-    </h2>
-  );
-}
-
-function Table({
-  headers,
+function Card({
+  title,
   children,
+  className = "",
 }: {
-  headers: string[];
+  title: string;
   children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="mt-4 overflow-x-auto rounded-3xl border border-line bg-surface">
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr>
-            {headers.map((h) => (
-              <th key={h} className="px-4 py-3 text-xs font-medium text-ink-soft">
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{children}</tbody>
-      </table>
+    <section
+      className={`rounded-3xl border border-line bg-surface px-5 py-4 ${className}`}
+    >
+      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-soft">
+        {title}
+      </h2>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+function MiniRow({
+  label,
+  value,
+  of,
+}: {
+  label: string;
+  value: number;
+  of: number;
+}) {
+  const pct = of > 0 ? Math.round((value / of) * 100) : 0;
+  return (
+    <div className="flex items-center gap-3 py-1.5">
+      <span className="w-36 shrink-0 text-sm">{label}</span>
+      <span className="w-10 shrink-0 text-sm font-semibold tabular-nums">
+        {value}
+      </span>
+      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+        <span
+          className="block h-full rounded-full bg-ink"
+          style={{ width: `${pct}%` }}
+        />
+      </span>
     </div>
   );
 }
 
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="whitespace-nowrap px-4 py-3">{children}</td>;
+function Bars({
+  rows,
+  empty,
+}: {
+  rows: { day: string; value: number; note?: string }[];
+  empty: string;
+}) {
+  const peak = Math.max(...rows.map((r) => r.value), 1);
+  if (!rows.some((r) => r.value > 0)) {
+    return <p className="py-2 text-sm text-ink-soft">{empty}</p>;
+  }
+  return (
+    <div className="flex flex-col">
+      {rows.map((r) => (
+        <div key={r.day} className="flex items-center gap-3 py-1">
+          <span className="w-14 shrink-0 text-xs text-ink-soft">
+            {shortDay(r.day)}
+          </span>
+          <span className="w-6 shrink-0 text-sm font-semibold tabular-nums">
+            {r.value || ""}
+          </span>
+          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
+            <span
+              className="block h-full rounded-full bg-ink"
+              style={{ width: `${(r.value / peak) * 100}%` }}
+            />
+          </span>
+          {r.note ? (
+            <span className="shrink-0 text-[11px] text-ink-soft">{r.note}</span>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
+function Badge({
+  children,
+  live,
+}: {
+  children: React.ReactNode;
+  live?: boolean;
+}) {
   return (
-    <div className="mt-4 rounded-3xl border border-line bg-surface px-4 py-6 text-sm text-ink-soft">
+    <span
+      className={`ml-1 inline-block rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+        live ? "border-line bg-ink text-canvas" : "border-line text-ink-soft"
+      }`}
+    >
       {children}
-    </div>
+    </span>
+  );
+}
+
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="px-4 py-2.5 font-medium">{children}</th>;
+}
+
+function Td({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <td className={`whitespace-nowrap px-4 py-2.5 ${className}`}>{children}</td>
   );
 }
