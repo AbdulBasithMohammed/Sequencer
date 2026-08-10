@@ -7,7 +7,7 @@
 --
 --   set -a && source .env.local && set +a && \
 --     curl -s -X POST \
---       "https://api.supabase.com/v1/projects/lbgfjqzvmacikywyzwzr/database/query" \
+--       "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_REF/database/query" \
 --       -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
 --       -H "Content-Type: application/json" \
 --       --data-binary @<(jq -Rs '{query: .}' tests/swap-dead-card.sql)
