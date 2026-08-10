@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Plus_Jakarta_Sans } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import { InviteNotificationsMount } from "@/components/invite-notifications-mount";
 import "./globals.css";
 
@@ -88,6 +89,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <InviteNotificationsMount />
         {children}
+        <Analytics />
       </body>
     </html>
   );
