@@ -1,5 +1,6 @@
 import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
+import { recordCountryOnce } from "@/lib/geo/record";
 import { AppSidebar } from "./app-sidebar";
 
 // Server-side data fetcher. Hands the sidebar to a client component
@@ -11,6 +12,12 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) return <>{children}</>;
   const profile = await getCurrentProfile();
+
+  // One write per account, ever. Skipped entirely once set, which is
+  // also what backfills the accounts that existed before this shipped —
+  // they pick it up the next time they visit. There is no historical geo
+  // to recover, so returning users are the only route.
+  if (profile && !profile.country) await recordCountryOnce();
 
   const handle =
     profile?.display_name ?? user.email?.split("@")[0] ?? "you";

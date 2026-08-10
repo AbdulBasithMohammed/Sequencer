@@ -44,12 +44,15 @@ type UserRow = {
   email: string | null;
   display_name: string;
   tag: string | null;
+  country: string | null;
   is_guest: boolean;
   is_bot: boolean;
   is_admin: boolean;
   created_at: string;
   last_sign_in_at: string | null;
 };
+
+type CountryRow = { country: string; players: number };
 
 type SignupDay = { day: string; registered: number; guests: number };
 type GameDay = { day: string; completed: number };
@@ -105,6 +108,25 @@ function fmtTime(iso: string) {
     second: "2-digit",
     hour12: false,
   });
+}
+
+// Two-letter code -> regional indicator pair, which renders as a flag.
+function flag(cc: string | null) {
+  if (!cc || !/^[A-Z]{2}$/.test(cc)) return "";
+  return String.fromCodePoint(
+    ...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65),
+  );
+}
+
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+
+function countryLabel(cc: string | null) {
+  if (!cc || !/^[A-Z]{2}$/.test(cc)) return "Unknown";
+  try {
+    return regionNames.of(cc) ?? cc;
+  } catch {
+    return cc;
+  }
 }
 
 function duration(secs: number | null) {
@@ -450,49 +472,88 @@ async function FeedbackTab({
 }
 
 async function UsersTab({ supabase }: { supabase: Db }) {
-  const { data } = await supabase.rpc("admin_user_list", { p_limit: 300 });
-  const users = (data ?? []) as UserRow[];
+  const [usersRes, countriesRes] = await Promise.all([
+    supabase.rpc("admin_user_list", { p_limit: 300 }),
+    supabase.rpc("admin_countries"),
+  ]);
+  const users = (usersRes.data ?? []) as UserRow[];
+  const countries = (countriesRes.data ?? []) as CountryRow[];
+  const known = countries.filter((c) => c.country !== "??");
+  const totalKnown = known.reduce((s, c) => s + c.players, 0);
 
   return (
-    <Card title={`All users · ${users.length}`} className="mt-6">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="text-xs text-ink-soft">
-              <Th>Name</Th>
-              <Th>Email</Th>
-              <Th>Type</Th>
-              <Th>Joined</Th>
-              <Th>Last seen</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u, i) => (
-              <tr
-                key={`${u.tag ?? u.display_name}-${i}`}
-                className="border-t border-line"
-              >
-                <Td>
-                  {u.display_name}
-                  {u.tag ? (
-                    <span className="ml-1.5 font-mono text-xs text-ink-soft">
-                      #{u.tag}
-                    </span>
-                  ) : null}
-                  {u.is_admin ? <Badge live>admin</Badge> : null}
-                </Td>
-                <Td className="font-mono text-xs">{u.email ?? "—"}</Td>
-                <Td>{u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}</Td>
-                <Td className="text-ink-soft">{fmtDateTime(u.created_at)}</Td>
-                <Td className="text-ink-soft">
-                  {fmtDateTime(u.last_sign_in_at)}
-                </Td>
+    <>
+      {known.length ? (
+        <Card title={`Countries · ${known.length}`} className="mt-6">
+          {known.slice(0, 8).map((c) => (
+            <MiniRow
+              key={c.country}
+              label={`${flag(c.country)} ${countryLabel(c.country)}`}
+              value={c.players}
+              of={totalKnown}
+            />
+          ))}
+        </Card>
+      ) : null}
+
+      <Card title={`All users · ${users.length}`} className="mt-4">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="text-xs text-ink-soft">
+                <Th>Name</Th>
+                <Th>Country</Th>
+                <Th>Email</Th>
+                <Th>Type</Th>
+                <Th>Joined</Th>
+                <Th>Last seen</Th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+            </thead>
+            <tbody>
+              {users.map((u, i) => (
+                <tr
+                  key={`${u.tag ?? u.display_name}-${i}`}
+                  className="border-t border-line"
+                >
+                  <Td>
+                    {u.display_name}
+                    {u.tag ? (
+                      <span className="ml-1.5 font-mono text-xs text-ink-soft">
+                        #{u.tag}
+                      </span>
+                    ) : null}
+                    {u.is_admin ? <Badge live>admin</Badge> : null}
+                  </Td>
+                  <Td title={countryLabel(u.country)}>
+                    {u.country ? (
+                      <>
+                        {flag(u.country)}{" "}
+                        <span className="font-mono text-xs">{u.country}</span>
+                      </>
+                    ) : (
+                      <span className="text-ink-soft">—</span>
+                    )}
+                  </Td>
+                  <Td className="font-mono text-xs">{u.email ?? "—"}</Td>
+                  <Td>
+                    {u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}
+                  </Td>
+                  <Td className="text-ink-soft">{fmtDateTime(u.created_at)}</Td>
+                  <Td className="text-ink-soft">
+                    {fmtDateTime(u.last_sign_in_at)}
+                  </Td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-3 text-xs text-ink-soft">
+          Country is captured from the edge on a signed-in visit and set
+          once. Accounts that predate this show — until their next visit;
+          there is no historical geo to backfill from.
+        </p>
+      </Card>
+    </>
   );
 }
 
@@ -619,11 +680,15 @@ function Th({ children }: { children: React.ReactNode }) {
 function Td({
   children,
   className = "",
+  title,
 }: {
   children: React.ReactNode;
   className?: string;
+  title?: string;
 }) {
   return (
-    <td className={`whitespace-nowrap px-4 py-2.5 ${className}`}>{children}</td>
+    <td className={`whitespace-nowrap px-4 py-2.5 ${className}`} title={title}>
+      {children}
+    </td>
   );
 }
