@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/me";
 import { createClient } from "@/lib/supabase/server";
-import { ColumnChart, SERIES_1, SERIES_2 } from "./charts";
+import { TrendChart, SERIES_1, SERIES_2 } from "./charts";
 
 // Live snapshot, never cached — a stats page showing stale numbers is
 // worse than no stats page.
@@ -74,6 +74,10 @@ type Feedback = {
 
 type FeedbackTotals = { total: number; last_24h: number; last_7d: number };
 
+const TABS = ["overview", "feedback", "users"] as const;
+type Tab = (typeof TABS)[number];
+const RANGES = [7, 30, 90];
+
 function duration(secs: number | null) {
   if (!secs || secs < 0) return "—";
   const m = Math.floor(secs / 60);
@@ -81,7 +85,11 @@ function duration(secs: number | null) {
   return m ? `${m}m ${s}s` : `${s}s`;
 }
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; range?: string }>;
+}) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
@@ -92,36 +100,22 @@ export default async function AdminPage() {
   const { data: isAdmin } = await supabase.rpc("current_user_is_admin");
   if (!isAdmin) notFound();
 
-  const [
-    overviewRes,
-    roomsRes,
-    usersRes,
-    signupsRes,
-    totalsRes,
-    gamesRes,
-    feedbackRes,
-    feedbackTotalsRes,
-  ] = await Promise.all([
+  const params = await searchParams;
+  const tab: Tab = (TABS as readonly string[]).includes(params.tab ?? "")
+    ? (params.tab as Tab)
+    : "overview";
+  const range = RANGES.includes(Number(params.range))
+    ? Number(params.range)
+    : 30;
+
+  // Always shown, so always fetched. Everything else is per-tab, so a
+  // visit costs one tab's worth of queries rather than all of them.
+  const [overviewRes, fbTotalsRes] = await Promise.all([
     supabase.rpc("admin_overview"),
-    supabase.rpc("admin_active_rooms"),
-    supabase.rpc("admin_user_list", { p_limit: 200 }),
-    supabase.rpc("admin_signups_by_day", { p_days: 14 }),
-    supabase.rpc("admin_game_totals"),
-    supabase.rpc("admin_games_by_day", { p_days: 14 }),
-    supabase.rpc("admin_feedback", { p_limit: 100 }),
     supabase.rpc("admin_feedback_totals"),
   ]);
-
   const o = (overviewRes.data?.[0] ?? null) as Overview | null;
-  const rooms = (roomsRes.data ?? []) as ActiveRoom[];
-  const users = (usersRes.data ?? []) as UserRow[];
-  const signups = (signupsRes.data ?? []) as SignupDay[];
-  const totals = (totalsRes.data?.[0] ?? null) as GameTotals | null;
-  const games = (gamesRes.data ?? []) as GameDay[];
-  const feedback = (feedbackRes.data ?? []) as Feedback[];
-  const fbTotals = (feedbackTotalsRes.data?.[0] ?? null) as FeedbackTotals | null;
-
-  const liveRooms = rooms.filter((r) => r.has_live_game).length;
+  const fbTotals = (fbTotalsRes.data?.[0] ?? null) as FeedbackTotals | null;
 
   return (
     <div className="mx-auto flex w-full max-w-[1100px] flex-col px-6 py-8 sm:px-8">
@@ -137,11 +131,74 @@ export default async function AdminPage() {
         </span>
       </div>
 
-      {/* The four numbers worth knowing at a glance. */}
+      <nav className="mt-5 flex gap-1 border-b border-line">
+        <TabLink current={tab} tab="overview" range={range}>
+          Overview
+        </TabLink>
+        <TabLink current={tab} tab="feedback" range={range}>
+          Feedback
+          {fbTotals?.last_7d ? ` · ${fbTotals.last_7d}` : ""}
+        </TabLink>
+        <TabLink current={tab} tab="users" range={range}>
+          Users · {o?.total_users ?? 0}
+        </TabLink>
+      </nav>
+
+      {tab === "overview" ? (
+        <OverviewTab supabase={supabase} o={o} range={range} />
+      ) : null}
+      {tab === "feedback" ? (
+        <FeedbackTab supabase={supabase} totals={fbTotals} />
+      ) : null}
+      {tab === "users" ? <UsersTab supabase={supabase} /> : null}
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- tabs */
+
+type Db = Awaited<ReturnType<typeof createClient>>;
+
+async function OverviewTab({
+  supabase,
+  o,
+  range,
+}: {
+  supabase: Db;
+  o: Overview | null;
+  range: number;
+}) {
+  const [roomsRes, signupsRes, totalsRes, gamesRes] = await Promise.all([
+    supabase.rpc("admin_active_rooms"),
+    supabase.rpc("admin_signups_by_day", { p_days: range }),
+    supabase.rpc("admin_game_totals"),
+    supabase.rpc("admin_games_by_day", { p_days: range }),
+  ]);
+
+  const rooms = (roomsRes.data ?? []) as ActiveRoom[];
+  const signups = ((signupsRes.data ?? []) as SignupDay[]).slice().reverse();
+  const totals = (totalsRes.data?.[0] ?? null) as GameTotals | null;
+  const games = ((gamesRes.data ?? []) as GameDay[]).slice().reverse();
+  const liveRooms = rooms.filter((r) => r.has_live_game).length;
+
+  return (
+    <>
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi label="Players" value={o?.total_users ?? 0} sub={`${o?.registered_users ?? 0} registered`} />
-        <Kpi label="New today" value={o?.new_24h ?? 0} sub={`${o?.new_7d ?? 0} this week`} />
-        <Kpi label="Playing now" value={o?.games_in_progress ?? 0} sub={`${liveRooms} live room${liveRooms === 1 ? "" : "s"}`} />
+        <Kpi
+          label="Players"
+          value={o?.total_users ?? 0}
+          sub={`${o?.registered_users ?? 0} registered`}
+        />
+        <Kpi
+          label="New today"
+          value={o?.new_24h ?? 0}
+          sub={`${o?.new_7d ?? 0} this week`}
+        />
+        <Kpi
+          label="Playing now"
+          value={o?.games_in_progress ?? 0}
+          sub={`${liveRooms} live room${liveRooms === 1 ? "" : "s"}`}
+        />
         <Kpi
           label="Games finished"
           value={totals?.completed_total ?? 0}
@@ -153,114 +210,98 @@ export default async function AdminPage() {
         />
       </div>
 
+      <div className="mt-4 flex items-center justify-end gap-1">
+        {RANGES.map((r) => (
+          <a
+            key={r}
+            href={`/admin?tab=overview&range=${r}`}
+            className={`rounded-full border px-3 py-1 text-xs ${
+              r === range
+                ? "border-line bg-ink text-canvas"
+                : "border-line text-ink-soft hover:text-ink"
+            }`}
+          >
+            {r}d
+          </a>
+        ))}
+      </div>
+
+      <div className="mt-2 grid gap-4 lg:grid-cols-2">
+        <Card title={`Signups · ${range} days`}>
+          <TrendChart
+            days={signups.map((d) => d.day)}
+            series={[
+              {
+                name: "Registered",
+                color: SERIES_1,
+                values: signups.map((d) => d.registered),
+              },
+              {
+                name: "Guests",
+                color: SERIES_2,
+                values: signups.map((d) => d.guests),
+              },
+            ]}
+            empty={`No signups in the last ${range} days.`}
+          />
+        </Card>
+
+        <Card title={`Games finished · ${range} days`}>
+          <TrendChart
+            days={games.map((d) => d.day)}
+            series={[
+              {
+                name: "Completed",
+                color: SERIES_1,
+                values: games.map((d) => d.completed),
+              },
+            ]}
+            empty="Nothing recorded yet — tracking starts from the deploy that added the counter."
+          />
+        </Card>
+      </div>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card title="Who's signed up">
-          <MiniRow label="Registered" value={o?.registered_users ?? 0} of={o?.total_users ?? 0} />
-          <MiniRow label="Guests" value={o?.guest_users ?? 0} of={o?.total_users ?? 0} />
-          <MiniRow label="Bots" value={o?.bot_users ?? 0} of={o?.total_users ?? 0} />
+          <MiniRow
+            label="Registered"
+            value={o?.registered_users ?? 0}
+            of={o?.total_users ?? 0}
+          />
+          <MiniRow
+            label="Guests"
+            value={o?.guest_users ?? 0}
+            of={o?.total_users ?? 0}
+          />
+          <MiniRow
+            label="Bots"
+            value={o?.bot_users ?? 0}
+            of={o?.total_users ?? 0}
+          />
         </Card>
 
         <Card title="Rooms right now">
-          <MiniRow label="Waiting in lobby" value={o?.rooms_waiting ?? 0} of={o?.rooms_total ?? 0} />
-          <MiniRow label="In game" value={o?.rooms_in_game ?? 0} of={o?.rooms_total ?? 0} />
-          <MiniRow label="Seated players" value={o?.players_seated ?? 0} of={o?.players_seated ?? 0} />
-        </Card>
-      </div>
-
-      <Card
-        title={`Feedback${fbTotals?.total ? ` · ${fbTotals.total}` : ""}`}
-        className="mt-4"
-      >
-        {feedback.length ? (
-          <>
-            <p className="-mt-1 mb-3 text-xs text-ink-soft">
-              {fbTotals?.last_24h ?? 0} in the last 24h ·{" "}
-              {fbTotals?.last_7d ?? 0} this week · kept for 30 days
-            </p>
-            <ul className="flex max-h-[420px] flex-col gap-2 overflow-y-auto">
-              {feedback.map((f, i) => (
-                <li key={f.id}>
-                  {/* Rows arrive registered-first; mark where guest
-                      feedback starts so the low-priority pile is obvious
-                      without having to read each byline. */}
-                  {f.was_guest && !feedback[i - 1]?.was_guest ? (
-                    <p className="mb-2 mt-3 text-[11px] uppercase tracking-wide text-ink-soft">
-                      From guests
-                    </p>
-                  ) : null}
-                  <div
-                    className={`rounded-2xl border border-line px-4 py-3 ${
-                      f.was_guest ? "bg-transparent" : "bg-canvas"
-                    }`}
-                  >
-                    <p
-                      className={`whitespace-pre-wrap text-sm ${
-                        f.was_guest ? "text-ink-soft" : ""
-                      }`}
-                    >
-                      {f.body}
-                    </p>
-                    <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-soft">
-                      <span>{f.author_name ?? "deleted account"}</span>
-                      {f.author_tag ? (
-                        <span className="font-mono">#{f.author_tag}</span>
-                      ) : null}
-                      {f.was_guest ? <Badge>guest</Badge> : null}
-                      <span>·</span>
-                      <span>{new Date(f.created_at).toLocaleString()}</span>
-                      {f.page ? (
-                        <>
-                          <span>·</span>
-                          <span className="font-mono">{f.page}</span>
-                        </>
-                      ) : null}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <p className="py-2 text-sm text-ink-soft">
-            No feedback yet. The widget is on every signed-in page.
-          </p>
-        )}
-      </Card>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Card title="Signups · 14 days">
-          <ColumnChart
-            data={[...signups].reverse().map((d) => ({
-              day: d.day,
-              segments: [
-                { value: d.registered, color: SERIES_1, name: "registered" },
-                { value: d.guests, color: SERIES_2, name: "guest" },
-              ],
-            }))}
-            legend={[
-              { name: "Registered", color: SERIES_1 },
-              { name: "Guests", color: SERIES_2 },
-            ]}
-            empty="No signups in the last 14 days."
+          <MiniRow
+            label="Waiting in lobby"
+            value={o?.rooms_waiting ?? 0}
+            of={o?.rooms_total ?? 0}
           />
-        </Card>
-
-        <Card title="Games finished · 14 days">
-          <ColumnChart
-            data={[...games].reverse().map((d) => ({
-              day: d.day,
-              segments: [
-                { value: d.completed, color: SERIES_1, name: "completed" },
-              ],
-            }))}
-            empty="Nothing recorded yet — tracking starts from today's deploy. Games finished before that were deleted by the cleanup cron."
+          <MiniRow
+            label="In game"
+            value={o?.rooms_in_game ?? 0}
+            of={o?.rooms_total ?? 0}
+          />
+          <MiniRow
+            label="Seated players"
+            value={o?.players_seated ?? 0}
+            of={o?.players_seated ?? 0}
           />
         </Card>
       </div>
 
-      {rooms.length > 0 && (
+      {rooms.length > 0 ? (
         <Card title={`Live rooms · ${rooms.length}`} className="mt-4">
-          <div className="-mx-4 overflow-x-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="text-xs text-ink-soft">
@@ -295,62 +336,166 @@ export default async function AdminPage() {
             </table>
           </div>
         </Card>
-      )}
-
-      {/* Collapsed by default — this is the long one, and it's reference
-          material rather than something you scan every visit. */}
-      <details className="group mt-4 rounded-3xl border border-line bg-surface">
-        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-medium">
-          All users · {users.length}
-          <span className="ml-2 text-ink-soft group-open:hidden">show</span>
-          <span className="ml-2 hidden text-ink-soft group-open:inline">hide</span>
-        </summary>
-        <div className="overflow-x-auto border-t border-line">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-xs text-ink-soft">
-                <Th>Name</Th>
-                <Th>Email</Th>
-                <Th>Type</Th>
-                <Th>Joined</Th>
-                <Th>Last seen</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u, i) => (
-                <tr key={`${u.tag ?? u.display_name}-${i}`} className="border-t border-line">
-                  <Td>
-                    {u.display_name}
-                    {u.tag ? (
-                      <span className="ml-1.5 font-mono text-xs text-ink-soft">
-                        #{u.tag}
-                      </span>
-                    ) : null}
-                    {u.is_admin ? <Badge live>admin</Badge> : null}
-                  </Td>
-                  <Td className="font-mono text-xs">{u.email ?? "—"}</Td>
-                  <Td>{u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}</Td>
-                  <Td className="text-ink-soft">
-                    {new Date(u.created_at).toLocaleDateString()}
-                  </Td>
-                  <Td className="text-ink-soft">
-                    {u.last_sign_in_at
-                      ? new Date(u.last_sign_in_at).toLocaleDateString()
-                      : "—"}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
+      ) : null}
 
       <p className="mt-8 text-xs leading-relaxed text-ink-soft">
         Rooms and games are a live snapshot — finished games are deleted 5
         minutes after they end, and guests disappear 24 hours after their last
         sign-in. Only the daily completed-game counter is durable.
       </p>
-    </div>
+    </>
+  );
+}
+
+async function FeedbackTab({
+  supabase,
+  totals,
+}: {
+  supabase: Db;
+  totals: FeedbackTotals | null;
+}) {
+  const { data } = await supabase.rpc("admin_feedback", { p_limit: 200 });
+  const feedback = (data ?? []) as Feedback[];
+
+  return (
+    <>
+      <div className="mt-6 grid grid-cols-3 gap-3">
+        <Kpi label="All time" value={totals?.total ?? 0} sub="kept 30 days" />
+        <Kpi label="Last 24h" value={totals?.last_24h ?? 0} />
+        <Kpi label="This week" value={totals?.last_7d ?? 0} />
+      </div>
+
+      {feedback.length ? (
+        <ul className="mt-4 flex flex-col gap-2">
+          {feedback.map((f, i) => (
+            <li key={f.id}>
+              {/* Rows arrive registered-first; mark where guest feedback
+                  starts so the low-priority pile is obvious without
+                  reading each byline. */}
+              {f.was_guest && !feedback[i - 1]?.was_guest ? (
+                <p className="mb-2 mt-5 text-[11px] uppercase tracking-wide text-ink-soft">
+                  From guests · lower priority
+                </p>
+              ) : null}
+              <div
+                className={`rounded-2xl border border-line px-4 py-3 ${
+                  f.was_guest ? "" : "bg-surface"
+                }`}
+              >
+                <p
+                  className={`whitespace-pre-wrap text-sm ${
+                    f.was_guest ? "text-ink-soft" : ""
+                  }`}
+                >
+                  {f.body}
+                </p>
+                <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-soft">
+                  <span>{f.author_name ?? "deleted account"}</span>
+                  {f.author_tag ? (
+                    <span className="font-mono">#{f.author_tag}</span>
+                  ) : null}
+                  {f.was_guest ? <Badge>guest</Badge> : null}
+                  <span>·</span>
+                  <span>{new Date(f.created_at).toLocaleString()}</span>
+                  {f.page ? (
+                    <>
+                      <span>·</span>
+                      <span className="font-mono">{f.page}</span>
+                    </>
+                  ) : null}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <Card title="Nothing yet" className="mt-4">
+          <p className="text-sm text-ink-soft">
+            No feedback has come in. The widget sits bottom-right on every
+            signed-in page.
+          </p>
+        </Card>
+      )}
+    </>
+  );
+}
+
+async function UsersTab({ supabase }: { supabase: Db }) {
+  const { data } = await supabase.rpc("admin_user_list", { p_limit: 300 });
+  const users = (data ?? []) as UserRow[];
+
+  return (
+    <Card title={`All users · ${users.length}`} className="mt-6">
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="text-xs text-ink-soft">
+              <Th>Name</Th>
+              <Th>Email</Th>
+              <Th>Type</Th>
+              <Th>Joined</Th>
+              <Th>Last seen</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u, i) => (
+              <tr
+                key={`${u.tag ?? u.display_name}-${i}`}
+                className="border-t border-line"
+              >
+                <Td>
+                  {u.display_name}
+                  {u.tag ? (
+                    <span className="ml-1.5 font-mono text-xs text-ink-soft">
+                      #{u.tag}
+                    </span>
+                  ) : null}
+                  {u.is_admin ? <Badge live>admin</Badge> : null}
+                </Td>
+                <Td className="font-mono text-xs">{u.email ?? "—"}</Td>
+                <Td>{u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}</Td>
+                <Td className="text-ink-soft">
+                  {new Date(u.created_at).toLocaleDateString()}
+                </Td>
+                <Td className="text-ink-soft">
+                  {u.last_sign_in_at
+                    ? new Date(u.last_sign_in_at).toLocaleDateString()
+                    : "—"}
+                </Td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+/* ------------------------------------------------------------ elements */
+
+function TabLink({
+  current,
+  tab,
+  range,
+  children,
+}: {
+  current: Tab;
+  tab: Tab;
+  range: number;
+  children: React.ReactNode;
+}) {
+  const active = current === tab;
+  return (
+    <a
+      href={`/admin?tab=${tab}&range=${range}`}
+      className={`-mb-px border-b-2 px-3 py-2 text-sm ${
+        active
+          ? "border-ink font-medium text-ink"
+          : "border-transparent text-ink-soft hover:text-ink"
+      }`}
+    >
+      {children}
+    </a>
   );
 }
 
