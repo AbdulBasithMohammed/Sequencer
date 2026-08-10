@@ -64,6 +64,31 @@ type SignupDay = {
   guests: number;
 };
 
+type GameTotals = {
+  completed_total: number;
+  completed_24h: number;
+  completed_7d: number;
+  avg_duration_secs: number;
+  games_with_bots: number;
+};
+
+type RecentGame = {
+  room_code: string | null;
+  player_count: number;
+  human_count: number;
+  bot_count: number;
+  winner_team: number | null;
+  duration_seconds: number | null;
+  finished_at: string;
+};
+
+function duration(secs: number | null) {
+  if (!secs || secs < 0) return "—";
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return m ? `${m}m ${s}s` : `${s}s`;
+}
+
 const RANGES = [6, 24, 72, 168];
 
 export default async function AdminPage({
@@ -84,20 +109,31 @@ export default async function AdminPage({
   const params = await searchParams;
   const hours = RANGES.includes(Number(params.hours)) ? Number(params.hours) : 24;
 
-  const [overviewRes, usersRes, roomsRes, allUsersRes, signupsRes] =
-    await Promise.all([
-      supabase.rpc("admin_overview"),
-      supabase.rpc("admin_recent_users", { p_hours: hours }),
-      supabase.rpc("admin_active_rooms"),
-      supabase.rpc("admin_user_list", { p_limit: 200 }),
-      supabase.rpc("admin_signups_by_day", { p_days: 14 }),
-    ]);
+  const [
+    overviewRes,
+    usersRes,
+    roomsRes,
+    allUsersRes,
+    signupsRes,
+    gameTotalsRes,
+    recentGamesRes,
+  ] = await Promise.all([
+    supabase.rpc("admin_overview"),
+    supabase.rpc("admin_recent_users", { p_hours: hours }),
+    supabase.rpc("admin_active_rooms"),
+    supabase.rpc("admin_user_list", { p_limit: 200 }),
+    supabase.rpc("admin_signups_by_day", { p_days: 14 }),
+    supabase.rpc("admin_game_totals"),
+    supabase.rpc("admin_recent_games", { p_limit: 50 }),
+  ]);
 
   const overview = (overviewRes.data?.[0] ?? null) as Overview | null;
   const recentUsers = (usersRes.data ?? []) as RecentUser[];
   const rooms = (roomsRes.data ?? []) as ActiveRoom[];
   const allUsers = (allUsersRes.data ?? []) as UserRow[];
   const signups = (signupsRes.data ?? []) as SignupDay[];
+  const gameTotals = (gameTotalsRes.data?.[0] ?? null) as GameTotals | null;
+  const recentGames = (recentGamesRes.data ?? []) as RecentGame[];
 
   return (
     <div className="mx-auto flex w-full max-w-[1000px] flex-col px-8 py-8">
@@ -187,6 +223,51 @@ export default async function AdminPage({
         </Table>
       ) : (
         <Empty>No rooms right now.</Empty>
+      )}
+
+      <SectionHeading>Completed games</SectionHeading>
+
+      {gameTotals ? (
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Stat label="Completed · all time" value={gameTotals.completed_total} />
+          <Stat label="Completed · 24h" value={gameTotals.completed_24h} />
+          <Stat label="Completed · 7d" value={gameTotals.completed_7d} />
+          <Stat label="With bots" value={gameTotals.games_with_bots} />
+          <div className="rounded-2xl border border-line bg-surface px-4 py-3">
+            <div className="text-xs text-ink-soft">Avg length</div>
+            <div
+              className="mt-1 font-display font-bold text-ink"
+              style={{ fontSize: "28px", letterSpacing: "-0.02em" }}
+            >
+              {duration(gameTotals.avg_duration_secs)}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {recentGames.length ? (
+        <Table
+          headers={["Room", "Players", "Bots", "Winner", "Length", "Finished"]}
+        >
+          {recentGames.map((g, i) => (
+            <tr key={`${g.room_code}-${i}`} className="border-t border-line">
+              <Td>
+                <span className="font-mono">{g.room_code ?? "—"}</span>
+              </Td>
+              <Td>{g.human_count}</Td>
+              <Td>{g.bot_count || "—"}</Td>
+              <Td>{g.winner_team !== null ? `Team ${g.winner_team}` : "—"}</Td>
+              <Td>{duration(g.duration_seconds)}</Td>
+              <Td>{new Date(g.finished_at).toLocaleString()}</Td>
+            </tr>
+          ))}
+        </Table>
+      ) : (
+        <Empty>
+          No completed games recorded yet. Tracking starts from the deploy that
+          added this table — games finished before then were deleted by the
+          cleanup cron and cannot be recovered.
+        </Empty>
       )}
 
       <SectionHeading>Signups · last 14 days</SectionHeading>
