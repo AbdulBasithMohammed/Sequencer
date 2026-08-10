@@ -1,6 +1,7 @@
 import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { AppSidebar } from "./app-sidebar";
+import { FeedbackWidget } from "./feedback-widget";
 
 // Server-side data fetcher. Hands the sidebar to a client component
 // that detects active route via usePathname() — so this whole shell can
@@ -25,6 +26,10 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         isGuest={profile?.is_guest ?? false}
       />
       <main className="overflow-hidden">{children}</main>
+      {/* Inside the authed branch only — submit_feedback requires a
+          session, so showing this to signed-out visitors would just
+          produce an error they can do nothing about. */}
+      <FeedbackWidget />
     </div>
   );
 }

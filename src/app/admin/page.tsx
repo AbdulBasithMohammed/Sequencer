@@ -62,6 +62,18 @@ type GameTotals = {
   games_with_bots: number;
 };
 
+type Feedback = {
+  id: string;
+  author_name: string | null;
+  author_tag: string | null;
+  was_guest: boolean;
+  body: string;
+  page: string | null;
+  created_at: string;
+};
+
+type FeedbackTotals = { total: number; last_24h: number; last_7d: number };
+
 function duration(secs: number | null) {
   if (!secs || secs < 0) return "—";
   const m = Math.floor(secs / 60);
@@ -80,15 +92,25 @@ export default async function AdminPage() {
   const { data: isAdmin } = await supabase.rpc("current_user_is_admin");
   if (!isAdmin) notFound();
 
-  const [overviewRes, roomsRes, usersRes, signupsRes, totalsRes, gamesRes] =
-    await Promise.all([
-      supabase.rpc("admin_overview"),
-      supabase.rpc("admin_active_rooms"),
-      supabase.rpc("admin_user_list", { p_limit: 200 }),
-      supabase.rpc("admin_signups_by_day", { p_days: 14 }),
-      supabase.rpc("admin_game_totals"),
-      supabase.rpc("admin_games_by_day", { p_days: 14 }),
-    ]);
+  const [
+    overviewRes,
+    roomsRes,
+    usersRes,
+    signupsRes,
+    totalsRes,
+    gamesRes,
+    feedbackRes,
+    feedbackTotalsRes,
+  ] = await Promise.all([
+    supabase.rpc("admin_overview"),
+    supabase.rpc("admin_active_rooms"),
+    supabase.rpc("admin_user_list", { p_limit: 200 }),
+    supabase.rpc("admin_signups_by_day", { p_days: 14 }),
+    supabase.rpc("admin_game_totals"),
+    supabase.rpc("admin_games_by_day", { p_days: 14 }),
+    supabase.rpc("admin_feedback", { p_limit: 100 }),
+    supabase.rpc("admin_feedback_totals"),
+  ]);
 
   const o = (overviewRes.data?.[0] ?? null) as Overview | null;
   const rooms = (roomsRes.data ?? []) as ActiveRoom[];
@@ -96,6 +118,8 @@ export default async function AdminPage() {
   const signups = (signupsRes.data ?? []) as SignupDay[];
   const totals = (totalsRes.data?.[0] ?? null) as GameTotals | null;
   const games = (gamesRes.data ?? []) as GameDay[];
+  const feedback = (feedbackRes.data ?? []) as Feedback[];
+  const fbTotals = (feedbackTotalsRes.data?.[0] ?? null) as FeedbackTotals | null;
 
   const liveRooms = rooms.filter((r) => r.has_live_game).length;
 
@@ -142,6 +166,49 @@ export default async function AdminPage() {
           <MiniRow label="Seated players" value={o?.players_seated ?? 0} of={o?.players_seated ?? 0} />
         </Card>
       </div>
+
+      <Card
+        title={`Feedback${fbTotals?.total ? ` · ${fbTotals.total}` : ""}`}
+        className="mt-4"
+      >
+        {feedback.length ? (
+          <>
+            <p className="-mt-1 mb-3 text-xs text-ink-soft">
+              {fbTotals?.last_24h ?? 0} in the last 24h ·{" "}
+              {fbTotals?.last_7d ?? 0} this week · kept for 30 days
+            </p>
+            <ul className="flex max-h-[420px] flex-col gap-2 overflow-y-auto">
+              {feedback.map((f) => (
+                <li
+                  key={f.id}
+                  className="rounded-2xl border border-line bg-canvas px-4 py-3"
+                >
+                  <p className="whitespace-pre-wrap text-sm">{f.body}</p>
+                  <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-soft">
+                    <span>{f.author_name ?? "deleted account"}</span>
+                    {f.author_tag ? (
+                      <span className="font-mono">#{f.author_tag}</span>
+                    ) : null}
+                    {f.was_guest ? <Badge>guest</Badge> : null}
+                    <span>·</span>
+                    <span>{new Date(f.created_at).toLocaleString()}</span>
+                    {f.page ? (
+                      <>
+                        <span>·</span>
+                        <span className="font-mono">{f.page}</span>
+                      </>
+                    ) : null}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p className="py-2 text-sm text-ink-soft">
+            No feedback yet. The widget is on every signed-in page.
+          </p>
+        )}
+      </Card>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card title="Signups · 14 days">
