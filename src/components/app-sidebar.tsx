@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { CoffeeButton } from "@/components/ui/coffee-button";
-import { FeedbackWidget } from "@/components/feedback-widget";
+import { FeedbackModal } from "@/components/feedback-widget";
 
 const BASE_NAV = [
   { href: "/play", label: "Play" },
@@ -27,6 +27,7 @@ export function AppSidebar({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
   const nav = BASE_NAV.filter(
@@ -55,9 +56,22 @@ export function AppSidebar({
 
   const coffeeLink = <CoffeeButton className="w-full" />;
 
-  // Closing the mobile dropdown on open keeps the modal from appearing
-  // behind an expanded menu.
-  const feedbackButton = <FeedbackWidget onOpen={() => setOpen(false)} />;
+  // The modal is rendered once at the bottom of this component, outside
+  // both layouts. It cannot live inside the mobile dropdown: that markup
+  // unmounts when the menu closes, which is exactly what opening feedback
+  // does — so the modal would be destroyed as soon as it appeared.
+  const feedbackButton = (
+    <button
+      type="button"
+      onClick={() => {
+        setFeedbackOpen(true);
+        setOpen(false);
+      }}
+      className="w-full rounded-xl border border-line bg-canvas px-3 py-2 text-[12px] font-semibold text-ink-soft transition-colors hover:bg-line/60 hover:text-ink"
+    >
+      Send feedback
+    </button>
+  );
 
   const userCard = (
     <div className="rounded-2xl border border-line bg-surface p-3.5">
@@ -131,6 +145,13 @@ export function AppSidebar({
           <div className="mt-2">{userCard}</div>
         </div>
       </aside>
+
+      {/* Outside both layouts so it survives the mobile dropdown
+          unmounting when the menu closes. */}
+      <FeedbackModal
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+      />
     </>
   );
 }

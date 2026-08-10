@@ -78,6 +78,35 @@ const TABS = ["overview", "feedback", "users"] as const;
 type Tab = (typeof TABS)[number];
 const RANGES = [7, 30, 90];
 
+// This page renders on the server, and Vercel runs UTC — so an
+// unqualified toLocaleString() formats in UTC, not the viewer's zone.
+// Every timestamp below is pinned to Toronto explicitly. Handles
+// EST/EDT automatically, so no DST maintenance.
+const TZ = "America/Toronto";
+
+function fmtDateTime(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function fmtTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-CA", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
 function duration(secs: number | null) {
   if (!secs || secs < 0) return "—";
   const m = Math.floor(secs / 60);
@@ -127,7 +156,7 @@ export default async function AdminPage({
           Admin
         </h1>
         <span className="text-xs text-ink-soft">
-          {new Date().toLocaleString()}
+          {fmtDateTime(new Date().toISOString())} Toronto
         </span>
       </div>
 
@@ -328,7 +357,7 @@ async function OverviewTab({
                       </Badge>
                     </Td>
                     <Td className="text-ink-soft">
-                      {new Date(r.last_activity_at).toLocaleTimeString()}
+                      {fmtTime(r.last_activity_at)}
                     </Td>
                   </tr>
                 ))}
@@ -396,7 +425,7 @@ async function FeedbackTab({
                   ) : null}
                   {f.was_guest ? <Badge>guest</Badge> : null}
                   <span>·</span>
-                  <span>{new Date(f.created_at).toLocaleString()}</span>
+                  <span>{fmtDateTime(f.created_at)}</span>
                   {f.page ? (
                     <>
                       <span>·</span>
@@ -454,13 +483,9 @@ async function UsersTab({ supabase }: { supabase: Db }) {
                 </Td>
                 <Td className="font-mono text-xs">{u.email ?? "—"}</Td>
                 <Td>{u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}</Td>
+                <Td className="text-ink-soft">{fmtDateTime(u.created_at)}</Td>
                 <Td className="text-ink-soft">
-                  {new Date(u.created_at).toLocaleDateString()}
-                </Td>
-                <Td className="text-ink-soft">
-                  {u.last_sign_in_at
-                    ? new Date(u.last_sign_in_at).toLocaleDateString()
-                    : "—"}
+                  {fmtDateTime(u.last_sign_in_at)}
                 </Td>
               </tr>
             ))}
