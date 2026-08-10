@@ -144,7 +144,13 @@ function FormBody({ mode, next }: { mode: Mode; next: string }) {
             required
             minLength={3}
             maxLength={20}
-            autoComplete="username"
+            // NOT "username": that token tells browsers and password
+            // managers this is the login identifier, so they autofill the
+            // saved email address. Two accounts ended up with their email
+            // as their public display name that way — visible to every
+            // other player in lobbies and friend search. "nickname" is the
+            // correct autofill token for a handle.
+            autoComplete="nickname"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             trailing={
