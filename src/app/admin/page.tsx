@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/me";
 import { createClient } from "@/lib/supabase/server";
+import { ColumnChart, SERIES_1, SERIES_2 } from "./charts";
 
 // Live snapshot, never cached — a stats page showing stale numbers is
 // worse than no stats page.
@@ -66,13 +67,6 @@ function duration(secs: number | null) {
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return m ? `${m}m ${s}s` : `${s}s`;
-}
-
-function shortDay(iso: string) {
-  return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
 }
 
 export default async function AdminPage() {
@@ -151,21 +145,31 @@ export default async function AdminPage() {
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card title="Signups · 14 days">
-          <Bars
-            rows={signups.map((d) => ({
+          <ColumnChart
+            data={[...signups].reverse().map((d) => ({
               day: d.day,
-              value: d.registered + d.guests,
-              note:
-                d.guests > 0 ? `${d.registered} + ${d.guests} guest` : undefined,
+              segments: [
+                { value: d.registered, color: SERIES_1, name: "registered" },
+                { value: d.guests, color: SERIES_2, name: "guest" },
+              ],
             }))}
+            legend={[
+              { name: "Registered", color: SERIES_1 },
+              { name: "Guests", color: SERIES_2 },
+            ]}
             empty="No signups in the last 14 days."
           />
         </Card>
 
         <Card title="Games finished · 14 days">
-          <Bars
-            rows={games.map((d) => ({ day: d.day, value: d.completed }))}
-            empty="Nothing recorded yet — tracking started today. Games finished before that were deleted by the cleanup cron."
+          <ColumnChart
+            data={[...games].reverse().map((d) => ({
+              day: d.day,
+              segments: [
+                { value: d.completed, color: SERIES_1, name: "completed" },
+              ],
+            }))}
+            empty="Nothing recorded yet — tracking starts from today's deploy. Games finished before that were deleted by the cleanup cron."
           />
         </Card>
       </div>
@@ -332,42 +336,6 @@ function MiniRow({
           style={{ width: `${pct}%` }}
         />
       </span>
-    </div>
-  );
-}
-
-function Bars({
-  rows,
-  empty,
-}: {
-  rows: { day: string; value: number; note?: string }[];
-  empty: string;
-}) {
-  const peak = Math.max(...rows.map((r) => r.value), 1);
-  if (!rows.some((r) => r.value > 0)) {
-    return <p className="py-2 text-sm text-ink-soft">{empty}</p>;
-  }
-  return (
-    <div className="flex flex-col">
-      {rows.map((r) => (
-        <div key={r.day} className="flex items-center gap-3 py-1">
-          <span className="w-14 shrink-0 text-xs text-ink-soft">
-            {shortDay(r.day)}
-          </span>
-          <span className="w-6 shrink-0 text-sm font-semibold tabular-nums">
-            {r.value || ""}
-          </span>
-          <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-            <span
-              className="block h-full rounded-full bg-ink"
-              style={{ width: `${(r.value / peak) * 100}%` }}
-            />
-          </span>
-          {r.note ? (
-            <span className="shrink-0 text-[11px] text-ink-soft">{r.note}</span>
-          ) : null}
-        </div>
-      ))}
     </div>
   );
 }
