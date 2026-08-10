@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { CoffeeButton } from "@/components/ui/coffee-button";
+import { FeedbackWidget } from "@/components/feedback-widget";
 
 const BASE_NAV = [
   { href: "/play", label: "Play" },
@@ -53,6 +54,10 @@ export function AppSidebar({
   ));
 
   const coffeeLink = <CoffeeButton className="w-full" />;
+
+  // Closing the mobile dropdown on open keeps the modal from appearing
+  // behind an expanded menu.
+  const feedbackButton = <FeedbackWidget onOpen={() => setOpen(false)} />;
 
   const userCard = (
     <div className="rounded-2xl border border-line bg-surface p-3.5">
@@ -107,6 +112,7 @@ export function AppSidebar({
         {open && (
           <div className="menu-enter stagger-children flex flex-col gap-2 border-b border-line bg-canvas p-5">
             {navLinks}
+            {feedbackButton}
             {coffeeLink}
             <div className="mt-2">{userCard}</div>
           </div>
@@ -120,6 +126,7 @@ export function AppSidebar({
         </Link>
         {navLinks}
         <div className="mt-auto">
+          <div className="mb-2">{feedbackButton}</div>
           {coffeeLink}
           <div className="mt-2">{userCard}</div>
         </div>
