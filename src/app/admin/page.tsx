@@ -46,6 +46,24 @@ type ActiveRoom = {
   last_activity_at: string;
 };
 
+// Contains PII (email). Only ever rendered behind the is_admin check.
+type UserRow = {
+  email: string | null;
+  display_name: string;
+  tag: string | null;
+  is_guest: boolean;
+  is_bot: boolean;
+  is_admin: boolean;
+  created_at: string;
+  last_sign_in_at: string | null;
+};
+
+type SignupDay = {
+  day: string;
+  registered: number;
+  guests: number;
+};
+
 const RANGES = [6, 24, 72, 168];
 
 export default async function AdminPage({
@@ -66,15 +84,20 @@ export default async function AdminPage({
   const params = await searchParams;
   const hours = RANGES.includes(Number(params.hours)) ? Number(params.hours) : 24;
 
-  const [overviewRes, usersRes, roomsRes] = await Promise.all([
-    supabase.rpc("admin_overview"),
-    supabase.rpc("admin_recent_users", { p_hours: hours }),
-    supabase.rpc("admin_active_rooms"),
-  ]);
+  const [overviewRes, usersRes, roomsRes, allUsersRes, signupsRes] =
+    await Promise.all([
+      supabase.rpc("admin_overview"),
+      supabase.rpc("admin_recent_users", { p_hours: hours }),
+      supabase.rpc("admin_active_rooms"),
+      supabase.rpc("admin_user_list", { p_limit: 200 }),
+      supabase.rpc("admin_signups_by_day", { p_days: 14 }),
+    ]);
 
   const overview = (overviewRes.data?.[0] ?? null) as Overview | null;
   const recentUsers = (usersRes.data ?? []) as RecentUser[];
   const rooms = (roomsRes.data ?? []) as ActiveRoom[];
+  const allUsers = (allUsersRes.data ?? []) as UserRow[];
+  const signups = (signupsRes.data ?? []) as SignupDay[];
 
   return (
     <div className="mx-auto flex w-full max-w-[1000px] flex-col px-8 py-8">
@@ -164,6 +187,69 @@ export default async function AdminPage({
         </Table>
       ) : (
         <Empty>No rooms right now.</Empty>
+      )}
+
+      <SectionHeading>Signups · last 14 days</SectionHeading>
+
+      {signups.some((d) => d.registered + d.guests > 0) ? (
+        <Table headers={["Day", "Registered", "Guests", ""]}>
+          {signups.map((d) => {
+            const peak = Math.max(
+              ...signups.map((x) => x.registered + x.guests),
+              1,
+            );
+            const total = d.registered + d.guests;
+            return (
+              <tr key={d.day} className="border-t border-line">
+                <Td>{d.day}</Td>
+                <Td>{d.registered}</Td>
+                <Td>{d.guests}</Td>
+                <td className="w-1/2 px-4 py-3">
+                  <div
+                    className="h-2 rounded-full bg-ink"
+                    style={{ width: `${(total / peak) * 100}%`, minWidth: total ? "4px" : "0" }}
+                  />
+                </td>
+              </tr>
+            );
+          })}
+        </Table>
+      ) : (
+        <Empty>No signups in the last 14 days.</Empty>
+      )}
+
+      <SectionHeading>All users</SectionHeading>
+
+      {allUsers.length ? (
+        <Table headers={["Name", "Email", "Type", "Joined", "Last seen"]}>
+          {allUsers.map((u, i) => (
+            <tr key={`${u.tag ?? u.display_name}-${i}`} className="border-t border-line">
+              <Td>
+                {u.display_name}
+                {u.tag ? (
+                  <span className="ml-1.5 font-mono text-ink-soft">#{u.tag}</span>
+                ) : null}
+                {u.is_admin ? (
+                  <span className="ml-2 rounded-full border border-line px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-soft">
+                    admin
+                  </span>
+                ) : null}
+              </Td>
+              <Td>
+                <span className="font-mono text-xs">{u.email ?? "—"}</span>
+              </Td>
+              <Td>{u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}</Td>
+              <Td>{new Date(u.created_at).toLocaleDateString()}</Td>
+              <Td>
+                {u.last_sign_in_at
+                  ? new Date(u.last_sign_in_at).toLocaleString()
+                  : "—"}
+              </Td>
+            </tr>
+          ))}
+        </Table>
+      ) : (
+        <Empty>No users.</Empty>
       )}
 
       <p className="mt-10 text-xs leading-relaxed text-ink-soft">
