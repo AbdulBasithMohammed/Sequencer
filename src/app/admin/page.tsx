@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/me";
 import { createClient } from "@/lib/supabase/server";
 import { TrendChart, SERIES_1, SERIES_2 } from "./charts";
+import { RoomsTable, UsersTable, type RoomRow, type UserRow } from "./tables";
+import { countryLabel, duration, flag, fmtDateTime } from "./format";
 
 // Live snapshot, never cached — a stats page showing stale numbers is
 // worse than no stats page.
@@ -28,34 +30,9 @@ type Overview = {
   players_seated: number;
 };
 
-type ActiveRoom = {
-  code: string;
-  status: string;
-  host_name: string;
-  seats_taken: number;
-  capacity: number;
-  has_live_game: boolean;
-  created_at: string;
-  last_activity_at: string;
-};
-
-// Contains PII (email). Only ever rendered behind the is_admin check.
-type UserRow = {
-  email: string | null;
-  display_name: string;
-  tag: string | null;
-  country: string | null;
-  is_guest: boolean;
-  is_bot: boolean;
-  is_admin: boolean;
-  created_at: string;
-  last_sign_in_at: string | null;
-};
-
-type CountryRow = { country: string; players: number };
-
 type SignupDay = { day: string; registered: number; guests: number };
 type GameDay = { day: string; completed: number };
+type CountryRow = { country: string; players: number };
 
 type GameTotals = {
   completed_total: number;
@@ -80,61 +57,6 @@ type FeedbackTotals = { total: number; last_24h: number; last_7d: number };
 const TABS = ["overview", "feedback", "users"] as const;
 type Tab = (typeof TABS)[number];
 const RANGES = [7, 30, 90];
-
-// This page renders on the server, and Vercel runs UTC — so an
-// unqualified toLocaleString() formats in UTC, not the viewer's zone.
-// Every timestamp below is pinned to Toronto explicitly. Handles
-// EST/EDT automatically, so no DST maintenance.
-const TZ = "America/Toronto";
-
-function fmtDateTime(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleString("en-CA", {
-    timeZone: TZ,
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-CA", {
-    timeZone: TZ,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-}
-
-// Two-letter code -> regional indicator pair, which renders as a flag.
-function flag(cc: string | null) {
-  if (!cc || !/^[A-Z]{2}$/.test(cc)) return "";
-  return String.fromCodePoint(
-    ...[...cc].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65),
-  );
-}
-
-const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
-
-function countryLabel(cc: string | null) {
-  if (!cc || !/^[A-Z]{2}$/.test(cc)) return "Unknown";
-  try {
-    return regionNames.of(cc) ?? cc;
-  } catch {
-    return cc;
-  }
-}
-
-function duration(secs: number | null) {
-  if (!secs || secs < 0) return "—";
-  const m = Math.floor(secs / 60);
-  const s = secs % 60;
-  return m ? `${m}m ${s}s` : `${s}s`;
-}
 
 export default async function AdminPage({
   searchParams,
@@ -169,7 +91,7 @@ export default async function AdminPage({
   const fbTotals = (fbTotalsRes.data?.[0] ?? null) as FeedbackTotals | null;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1100px] flex-col px-6 py-8 sm:px-8">
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col px-6 py-8 sm:px-8">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h1
           className="font-display font-bold leading-none"
@@ -226,7 +148,7 @@ async function OverviewTab({
     supabase.rpc("admin_games_by_day", { p_days: range }),
   ]);
 
-  const rooms = (roomsRes.data ?? []) as ActiveRoom[];
+  const rooms = (roomsRes.data ?? []) as RoomRow[];
   const signups = ((signupsRes.data ?? []) as SignupDay[]).slice().reverse();
   const totals = (totalsRes.data?.[0] ?? null) as GameTotals | null;
   const games = ((gamesRes.data ?? []) as GameDay[]).slice().reverse();
@@ -261,7 +183,7 @@ async function OverviewTab({
         />
       </div>
 
-      <div className="mt-4 flex items-center justify-end gap-1">
+      <div className="mt-5 flex items-center justify-end gap-1">
         {RANGES.map((r) => (
           <a
             key={r}
@@ -272,45 +194,46 @@ async function OverviewTab({
                 : "border-line text-ink-soft hover:text-ink"
             }`}
           >
-            {r}d
+            {r} days
           </a>
         ))}
       </div>
 
-      <div className="mt-2 grid gap-4 lg:grid-cols-2">
-        <Card title={`Signups · ${range} days`}>
-          <TrendChart
-            days={signups.map((d) => d.day)}
-            series={[
-              {
-                name: "Registered",
-                color: SERIES_1,
-                values: signups.map((d) => d.registered),
-              },
-              {
-                name: "Guests",
-                color: SERIES_2,
-                values: signups.map((d) => d.guests),
-              },
-            ]}
-            empty={`No signups in the last ${range} days.`}
-          />
-        </Card>
+      {/* Full width, not side by side. At half width the date axis had
+          roughly 54px per label to work with, which is why it was
+          illegible — the columns need the whole row. */}
+      <Card title={`Signups · ${range} days`} className="mt-2">
+        <TrendChart
+          days={signups.map((d) => d.day)}
+          series={[
+            {
+              name: "Registered",
+              color: SERIES_1,
+              values: signups.map((d) => d.registered),
+            },
+            {
+              name: "Guests",
+              color: SERIES_2,
+              values: signups.map((d) => d.guests),
+            },
+          ]}
+          empty={`No signups in the last ${range} days.`}
+        />
+      </Card>
 
-        <Card title={`Games finished · ${range} days`}>
-          <TrendChart
-            days={games.map((d) => d.day)}
-            series={[
-              {
-                name: "Completed",
-                color: SERIES_1,
-                values: games.map((d) => d.completed),
-              },
-            ]}
-            empty="Nothing recorded yet — tracking starts from the deploy that added the counter."
-          />
-        </Card>
-      </div>
+      <Card title={`Games finished · ${range} days`} className="mt-4">
+        <TrendChart
+          days={games.map((d) => d.day)}
+          series={[
+            {
+              name: "Completed",
+              color: SERIES_1,
+              values: games.map((d) => d.completed),
+            },
+          ]}
+          empty="Nothing recorded yet — tracking starts from the deploy that added the counter."
+        />
+      </Card>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <Card title="Who's signed up">
@@ -352,40 +275,7 @@ async function OverviewTab({
 
       {rooms.length > 0 ? (
         <Card title={`Live rooms · ${rooms.length}`} className="mt-4">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="text-xs text-ink-soft">
-                  <Th>Code</Th>
-                  <Th>Host</Th>
-                  <Th>Seats</Th>
-                  <Th>Status</Th>
-                  <Th>Last activity</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {rooms.slice(0, 12).map((r) => (
-                  <tr key={r.code} className="border-t border-line">
-                    <Td>
-                      <span className="font-mono">{r.code}</span>
-                    </Td>
-                    <Td>{r.host_name}</Td>
-                    <Td>
-                      {r.seats_taken}/{r.capacity}
-                    </Td>
-                    <Td>
-                      <Badge live={r.has_live_game}>
-                        {r.has_live_game ? "Playing" : r.status}
-                      </Badge>
-                    </Td>
-                    <Td className="text-ink-soft">
-                      {fmtTime(r.last_activity_at)}
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <RoomsTable rows={rooms} />
         </Card>
       ) : null}
 
@@ -445,7 +335,11 @@ async function FeedbackTab({
                   {f.author_tag ? (
                     <span className="font-mono">#{f.author_tag}</span>
                   ) : null}
-                  {f.was_guest ? <Badge>guest</Badge> : null}
+                  {f.was_guest ? (
+                    <span className="rounded-full border border-line px-1.5 py-0.5 text-[10px] uppercase">
+                      guest
+                    </span>
+                  ) : null}
                   <span>·</span>
                   <span>{fmtDateTime(f.created_at)}</span>
                   {f.page ? (
@@ -462,7 +356,7 @@ async function FeedbackTab({
       ) : (
         <Card title="Nothing yet" className="mt-4">
           <p className="text-sm text-ink-soft">
-            No feedback has come in. The widget sits bottom-right on every
+            No feedback has come in. The button sits in the sidebar on every
             signed-in page.
           </p>
         </Card>
@@ -497,60 +391,14 @@ async function UsersTab({ supabase }: { supabase: Db }) {
       ) : null}
 
       <Card title={`All users · ${users.length}`} className="mt-4">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-xs text-ink-soft">
-                <Th>Name</Th>
-                <Th>Country</Th>
-                <Th>Email</Th>
-                <Th>Type</Th>
-                <Th>Joined</Th>
-                <Th>Last seen</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u, i) => (
-                <tr
-                  key={`${u.tag ?? u.display_name}-${i}`}
-                  className="border-t border-line"
-                >
-                  <Td>
-                    {u.display_name}
-                    {u.tag ? (
-                      <span className="ml-1.5 font-mono text-xs text-ink-soft">
-                        #{u.tag}
-                      </span>
-                    ) : null}
-                    {u.is_admin ? <Badge live>admin</Badge> : null}
-                  </Td>
-                  <Td title={countryLabel(u.country)}>
-                    {u.country ? (
-                      <>
-                        {flag(u.country)}{" "}
-                        <span className="font-mono text-xs">{u.country}</span>
-                      </>
-                    ) : (
-                      <span className="text-ink-soft">—</span>
-                    )}
-                  </Td>
-                  <Td className="font-mono text-xs">{u.email ?? "—"}</Td>
-                  <Td>
-                    {u.is_bot ? "Bot" : u.is_guest ? "Guest" : "Registered"}
-                  </Td>
-                  <Td className="text-ink-soft">{fmtDateTime(u.created_at)}</Td>
-                  <Td className="text-ink-soft">
-                    {fmtDateTime(u.last_sign_in_at)}
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <p className="-mt-1 mb-2 text-[11px] text-ink-soft">
+          Click any column heading to sort.
+        </p>
+        <UsersTable rows={users} />
         <p className="mt-3 text-xs text-ink-soft">
-          Country is captured from the edge on a signed-in visit and set
-          once. Accounts that predate this show — until their next visit;
-          there is no historical geo to backfill from.
+          Country is captured from the edge on a signed-in visit and set once.
+          Accounts that predate this show — until their next visit; there is no
+          historical geo to backfill from.
         </p>
       </Card>
     </>
@@ -641,7 +489,7 @@ function MiniRow({
   const pct = of > 0 ? Math.round((value / of) * 100) : 0;
   return (
     <div className="flex items-center gap-3 py-1.5">
-      <span className="w-36 shrink-0 text-sm">{label}</span>
+      <span className="w-44 shrink-0 truncate text-sm">{label}</span>
       <span className="w-10 shrink-0 text-sm font-semibold tabular-nums">
         {value}
       </span>
@@ -652,43 +500,5 @@ function MiniRow({
         />
       </span>
     </div>
-  );
-}
-
-function Badge({
-  children,
-  live,
-}: {
-  children: React.ReactNode;
-  live?: boolean;
-}) {
-  return (
-    <span
-      className={`ml-1 inline-block rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wide ${
-        live ? "border-line bg-ink text-canvas" : "border-line text-ink-soft"
-      }`}
-    >
-      {children}
-    </span>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-2.5 font-medium">{children}</th>;
-}
-
-function Td({
-  children,
-  className = "",
-  title,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  title?: string;
-}) {
-  return (
-    <td className={`whitespace-nowrap px-4 py-2.5 ${className}`} title={title}>
-      {children}
-    </td>
   );
 }

@@ -1,36 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-// Density-adaptive SVG trend chart with a hover layer.
+// Responsive column chart drawn at 1:1.
 //
-// The viewBox width is FIXED and the slot width is derived from the point
-// count, so 7 days and 180 days both fill the same box — bars thin out
-// instead of the chart growing off-screen and scaling down into hairlines.
-// Label interval and value labels back off as density rises.
+// The previous version used a fixed 720-unit viewBox scaled to 100% width.
+// Inside a half-width card that is roughly a 0.64 scale factor, so a
+// font-size of 9 rendered at about 5.7 real pixels — unreadable. Bars
+// tolerate being scaled; text does not.
+//
+// So: measure the container with a ResizeObserver and render the SVG at
+// its true pixel size. One viewBox unit is one CSS pixel, so 11px type is
+// 11px on screen at any card width.
 //
 // Palette: brand blue #5b7cfa and pink #ff5c8a, validated against the
 // cream surface #fffbf3 — CVD separation 18.0 (protan), normal-vision
-// 30.3. Pink is 2.85:1 against that surface, under the 3:1 bar, so the
-// chart ships a table view (and value labels when sparse enough to fit);
-// identity never rests on colour alone.
+// 30.3. Pink is 2.85:1 on that surface, under the 3:1 bar, so the chart
+// ships a table view and a legend; identity never rests on colour alone.
 
 export const SERIES_1 = "#5b7cfa";
 export const SERIES_2 = "#ff5c8a";
 
-const W = 720;
-const PLOT = 110;
-const TOP = 18;
-const BASE = TOP + PLOT;
-const H = BASE + 18; // room for the date labels below the baseline
+const H = 240;
+const M = { top: 14, right: 10, bottom: 30, left: 38 };
 
 export type Series = { name: string; color: string; values: number[] };
 
-function fmt(iso: string) {
+function fmtDay(iso: string) {
   return new Date(iso + "T00:00:00").toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
+}
+
+// Axis maxima people can read: 1/2/5 x 10^n, never 7 or 13.
+function niceMax(v: number) {
+  if (v <= 4) return 4;
+  const pow = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) {
+    const candidate = m * pow;
+    if (candidate >= v) return candidate;
+  }
+  return 10 * pow;
 }
 
 export function TrendChart({
@@ -42,29 +53,44 @@ export function TrendChart({
   series: Series[];
   empty: string;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) =>
+      setW(Math.floor(entry.contentRect.width)),
+    );
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const n = days.length;
   const totals = days.map((_, i) =>
     series.reduce((sum, s) => sum + (s.values[i] ?? 0), 0),
   );
-  const peak = Math.max(...totals, 1);
+  const hasData = totals.some((t) => t > 0);
 
-  if (!totals.some((t) => t > 0)) {
-    return <p className="py-8 text-sm text-ink-soft">{empty}</p>;
-  }
+  const plotW = Math.max(w - M.left - M.right, 10);
+  const plotH = H - M.top - M.bottom;
+  const max = niceMax(Math.max(...totals, 1));
+  const slot = plotW / Math.max(n, 1);
+  const bar = Math.max(Math.min(slot * 0.62, 40), 2);
+  const y = (v: number) => M.top + plotH - (v / max) * plotH;
 
-  const slot = W / n;
-  const bar = Math.max(Math.min(slot - Math.min(slot * 0.35, 10), 34), 2);
-  // Below ~16 points there is room for a number over every column; past
-  // that they collide, and the table view carries the exact figures.
-  const showValues = n <= 16;
-  const labelEvery = Math.ceil(n / 8);
+  // Four ticks including zero — enough to read a level, few enough to
+  // stay out of the way.
+  const ticks = [0, max * 0.25, max * 0.5, max * 0.75, max];
+
+  // Thin the date labels to whatever actually fits: ~54px per label.
+  const labelEvery = Math.max(1, Math.ceil(n / Math.max(plotW / 54, 1)));
 
   return (
     <figure className="m-0">
       {series.length > 1 ? (
-        <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1">
+        <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1">
           {series.map((s) => (
             <span
               key={s.name}
@@ -80,153 +106,189 @@ export function TrendChart({
         </div>
       ) : null}
 
-      <div className="relative">
-        {hover !== null && totals[hover] > 0 ? (
-          <div
-            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-xl border border-line bg-surface px-2.5 py-1.5 text-xs shadow-lg"
-            style={{ left: `${((hover + 0.5) / n) * 100}%`, top: 0 }}
-          >
-            <div className="font-medium">{fmt(days[hover])}</div>
-            {series.map((s) => (
-              <div key={s.name} className="flex items-center gap-1.5">
-                <span
-                  className="inline-block h-2 w-2 rounded-[2px]"
-                  style={{ background: s.color }}
-                />
-                <span className="text-ink-soft">{s.name}</span>
-                <span className="ml-auto font-semibold tabular-nums">
-                  {s.values[hover] ?? 0}
-                </span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        <svg
-          viewBox={`0 0 ${W} ${H}`}
-          width="100%"
-          height={H}
-          preserveAspectRatio="xMidYMax meet"
-          role="img"
-          aria-label={`${n}-day trend, peak ${peak}`}
-          onMouseLeave={() => setHover(null)}
-        >
-          <line
-            x1="0"
-            y1={BASE + 0.5}
-            x2={W}
-            y2={BASE + 0.5}
-            stroke="var(--color-line)"
-          />
-
-          {days.map((day, i) => {
-            const x = i * slot + (slot - bar) / 2;
-            let cursor = BASE;
-            const total = totals[i];
-
-            return (
-              <g key={day}>
-                {series.map((s) => {
-                  const v = s.values[i] ?? 0;
-                  if (v <= 0) return null;
-                  // 2px surface gap so stacked segments read as separate
-                  // marks rather than one striped block.
-                  const h = Math.max((v / peak) * PLOT - 2, 2);
-                  const y = cursor - h;
-                  cursor = y - 2;
-                  return (
-                    <rect
-                      key={s.name}
-                      x={x}
-                      y={y}
-                      width={bar}
-                      height={h}
-                      rx={Math.min(3, bar / 2)}
-                      fill={s.color}
-                      opacity={hover === null || hover === i ? 1 : 0.45}
+      <div ref={ref} className="relative w-full" style={{ height: H }}>
+        {!hasData ? (
+          <p className="pt-10 text-sm text-ink-soft">{empty}</p>
+        ) : w > 0 ? (
+          <>
+            {hover !== null ? (
+              <div
+                className="pointer-events-none absolute z-10 min-w-[132px] rounded-xl border border-line bg-surface px-3 py-2 text-xs shadow-lg"
+                style={{
+                  left: Math.min(
+                    Math.max(M.left + slot * (hover + 0.5) - 66, 0),
+                    Math.max(w - 132, 0),
+                  ),
+                  top: 0,
+                }}
+              >
+                <div className="mb-1 font-medium">{fmtDay(days[hover])}</div>
+                {series.map((s) => (
+                  <div key={s.name} className="flex items-center gap-2">
+                    <span
+                      className="inline-block h-2 w-2 shrink-0 rounded-[2px]"
+                      style={{ background: s.color }}
                     />
-                  );
-                })}
-
-                {showValues && total > 0 ? (
-                  <text
-                    x={x + bar / 2}
-                    y={cursor - 4}
-                    textAnchor="middle"
-                    fontSize="10"
-                    fontWeight="600"
-                    fill="var(--color-ink)"
-                  >
-                    {total}
-                  </text>
+                    <span className="text-ink-soft">{s.name}</span>
+                    <span className="ml-auto font-semibold tabular-nums">
+                      {s.values[hover] ?? 0}
+                    </span>
+                  </div>
+                ))}
+                {series.length > 1 ? (
+                  <div className="mt-1 flex items-center gap-2 border-t border-line pt-1">
+                    <span className="text-ink-soft">Total</span>
+                    <span className="ml-auto font-semibold tabular-nums">
+                      {totals[hover]}
+                    </span>
+                  </div>
                 ) : null}
+              </div>
+            ) : null}
 
-                {i % labelEvery === 0 ? (
+            <svg
+              width={w}
+              height={H}
+              viewBox={`0 0 ${w} ${H}`}
+              onMouseLeave={() => setHover(null)}
+              role="img"
+              aria-label={`${n}-day trend, maximum ${Math.max(...totals)}`}
+            >
+              {/* Gridlines and value axis */}
+              {ticks.map((t) => (
+                <g key={t}>
+                  <line
+                    x1={M.left}
+                    y1={y(t)}
+                    x2={w - M.right}
+                    y2={y(t)}
+                    stroke="var(--color-line)"
+                    strokeWidth={1}
+                  />
                   <text
-                    x={x + bar / 2}
-                    y={H - 4}
-                    textAnchor="middle"
-                    fontSize="9"
+                    x={M.left - 8}
+                    y={y(t) + 4}
+                    textAnchor="end"
+                    fontSize="11"
                     fill="var(--color-ink-soft)"
                   >
-                    {fmt(day)}
+                    {Number.isInteger(t) ? t : t.toFixed(1)}
                   </text>
-                ) : null}
+                </g>
+              ))}
 
-                {/* Hit target — full height and the whole slot, so the
-                    hover works on near-empty days too. */}
-                <rect
-                  x={i * slot}
-                  y={0}
-                  width={slot}
-                  height={BASE}
-                  fill="transparent"
-                  onMouseEnter={() => setHover(i)}
-                />
-              </g>
-            );
-          })}
-        </svg>
+              {days.map((day, i) => {
+                const x = M.left + i * slot + (slot - bar) / 2;
+                let cursor = y(0);
+                const active = hover === null || hover === i;
+
+                return (
+                  <g key={day}>
+                    {hover === i ? (
+                      <rect
+                        x={M.left + i * slot}
+                        y={M.top}
+                        width={slot}
+                        height={plotH}
+                        fill="var(--color-line)"
+                        opacity={0.35}
+                      />
+                    ) : null}
+
+                    {series.map((s) => {
+                      const v = s.values[i] ?? 0;
+                      if (v <= 0) return null;
+                      const h = Math.max((v / max) * plotH - 2, 2);
+                      const top = cursor - h;
+                      cursor = top - 2;
+                      return (
+                        <rect
+                          key={s.name}
+                          x={x}
+                          y={top}
+                          width={bar}
+                          height={h}
+                          rx={Math.min(3, bar / 2)}
+                          fill={s.color}
+                          opacity={active ? 1 : 0.4}
+                        />
+                      );
+                    })}
+
+                    {i % labelEvery === 0 ? (
+                      <text
+                        x={M.left + i * slot + slot / 2}
+                        y={H - 10}
+                        textAnchor="middle"
+                        fontSize="11"
+                        fill="var(--color-ink-soft)"
+                      >
+                        {fmtDay(day)}
+                      </text>
+                    ) : null}
+
+                    <rect
+                      x={M.left + i * slot}
+                      y={M.top}
+                      width={slot}
+                      height={plotH}
+                      fill="transparent"
+                      onMouseEnter={() => setHover(i)}
+                    />
+                  </g>
+                );
+              })}
+
+              <line
+                x1={M.left}
+                y1={y(0)}
+                x2={w - M.right}
+                y2={y(0)}
+                stroke="var(--color-ink-soft)"
+                strokeWidth={1}
+              />
+            </svg>
+          </>
+        ) : null}
       </div>
 
-      {/* Required relief for the sub-3:1 series colour, and the
-          accessibility table view. Also the only readable form of the
-          data at 90-day density. */}
-      <details className="mt-1">
-        <summary className="cursor-pointer text-[11px] text-ink-soft">
-          Show data
-        </summary>
-        <div className="mt-2 max-h-56 overflow-y-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="text-ink-soft">
-                <th className="py-1 font-medium">Day</th>
-                {series.map((s) => (
-                  <th key={s.name} className="py-1 font-medium">
-                    {s.name}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {days
-                .map((d, i) => ({ d, i }))
-                .filter(({ i }) => totals[i] > 0)
-                .reverse()
-                .map(({ d, i }) => (
-                  <tr key={d} className="border-t border-line">
-                    <td className="py-1">{fmt(d)}</td>
-                    {series.map((s) => (
-                      <td key={s.name} className="py-1 tabular-nums">
-                        {s.values[i] ?? 0}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
+      {hasData ? (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-[11px] text-ink-soft">
+            Show data
+          </summary>
+          <div className="mt-2 max-h-56 overflow-y-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="text-ink-soft">
+                  <th className="py-1 font-medium">Day</th>
+                  {series.map((s) => (
+                    <th key={s.name} className="py-1 font-medium">
+                      {s.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {days
+                  .map((d, i) => ({ d, i }))
+                  .filter(({ i }) => totals[i] > 0)
+                  .reverse()
+                  .map(({ d, i }) => (
+                    <tr key={d} className="border-t border-line">
+                      <td className="py-1">{fmtDay(d)}</td>
+                      {series.map((s) => (
+                        <td key={s.name} className="py-1 tabular-nums">
+                          {s.values[i] ?? 0}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ) : null}
     </figure>
   );
 }
