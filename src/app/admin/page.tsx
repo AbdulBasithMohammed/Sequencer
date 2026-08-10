@@ -178,27 +178,44 @@ export default async function AdminPage() {
               {fbTotals?.last_7d ?? 0} this week · kept for 30 days
             </p>
             <ul className="flex max-h-[420px] flex-col gap-2 overflow-y-auto">
-              {feedback.map((f) => (
-                <li
-                  key={f.id}
-                  className="rounded-2xl border border-line bg-canvas px-4 py-3"
-                >
-                  <p className="whitespace-pre-wrap text-sm">{f.body}</p>
-                  <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-soft">
-                    <span>{f.author_name ?? "deleted account"}</span>
-                    {f.author_tag ? (
-                      <span className="font-mono">#{f.author_tag}</span>
-                    ) : null}
-                    {f.was_guest ? <Badge>guest</Badge> : null}
-                    <span>·</span>
-                    <span>{new Date(f.created_at).toLocaleString()}</span>
-                    {f.page ? (
-                      <>
-                        <span>·</span>
-                        <span className="font-mono">{f.page}</span>
-                      </>
-                    ) : null}
-                  </p>
+              {feedback.map((f, i) => (
+                <li key={f.id}>
+                  {/* Rows arrive registered-first; mark where guest
+                      feedback starts so the low-priority pile is obvious
+                      without having to read each byline. */}
+                  {f.was_guest && !feedback[i - 1]?.was_guest ? (
+                    <p className="mb-2 mt-3 text-[11px] uppercase tracking-wide text-ink-soft">
+                      From guests
+                    </p>
+                  ) : null}
+                  <div
+                    className={`rounded-2xl border border-line px-4 py-3 ${
+                      f.was_guest ? "bg-transparent" : "bg-canvas"
+                    }`}
+                  >
+                    <p
+                      className={`whitespace-pre-wrap text-sm ${
+                        f.was_guest ? "text-ink-soft" : ""
+                      }`}
+                    >
+                      {f.body}
+                    </p>
+                    <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-soft">
+                      <span>{f.author_name ?? "deleted account"}</span>
+                      {f.author_tag ? (
+                        <span className="font-mono">#{f.author_tag}</span>
+                      ) : null}
+                      {f.was_guest ? <Badge>guest</Badge> : null}
+                      <span>·</span>
+                      <span>{new Date(f.created_at).toLocaleString()}</span>
+                      {f.page ? (
+                        <>
+                          <span>·</span>
+                          <span className="font-mono">{f.page}</span>
+                        </>
+                      ) : null}
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>
