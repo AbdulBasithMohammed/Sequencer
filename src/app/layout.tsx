@@ -87,6 +87,30 @@ export default function RootLayout({
       className={`${bricolage.variable} ${jakarta.variable} h-full`}
     >
       <body className="min-h-full flex flex-col bg-canvas text-ink">
+        {/* Only claims that are actually true of the site: free, browser
+            based, 2–12 players. Structured data that overstates gets
+            ignored at best and manually actioned at worst. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebApplication",
+              name: "Sequencr",
+              url: SITE_URL,
+              applicationCategory: "GameApplication",
+              browserRequirements: "Requires JavaScript",
+              operatingSystem: "Any",
+              description:
+                "Play the classic Sequence board game online with friends. Free, no ads, 2–12 players, browser-native.",
+              offers: {
+                "@type": "Offer",
+                price: "0",
+                priceCurrency: "USD",
+              },
+            }),
+          }}
+        />
         <InviteNotificationsMount />
         {children}
         <Analytics />

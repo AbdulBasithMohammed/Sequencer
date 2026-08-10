@@ -145,6 +145,20 @@ export default async function RulesPage() {
         removed by a one-eyed jack. The line is locked in.
       </Section>
 
+      <Section title="Keep reading">
+        Rules are only half of it — the{" "}
+        <Link href="/strategy" className="underline">
+          strategy guide
+        </Link>{" "}
+        covers why corners are the cheapest sequences on the board and when
+        to spend a jack. The{" "}
+        <Link href="/faq" className="underline">
+          FAQ
+        </Link>{" "}
+        answers the practical questions: player counts, bots, playing with
+        friends, and whether you need an account.
+      </Section>
+
       {!isAuthed && (
         <div className="mt-12 mb-8 flex flex-wrap gap-3">
           <SoftLinkButton
