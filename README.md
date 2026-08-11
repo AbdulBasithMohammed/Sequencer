@@ -10,15 +10,17 @@ A free, browser-native implementation of Jax's Sequence card-and-board game. 2�
 
 ## Highlights
 
-- **Play in seconds** — guest mode with no signup, or a permanent account if you want friends and stats
+- **Play in seconds** — guest mode with no signup, or a permanent account if you want friends and invites
 - **Real-time multiplayer** — 2–12 players in head-to-head or team formats, with live moves over Supabase Realtime
 - **Server-authoritative rules engine** — Postgres functions enforce every game rule; clients can't cheat by tampering with state
 - **Full Sequence ruleset** — two-eyed jacks, one-eyed jacks, dead-card swap, corner wilds, shared-chip sequences, deck refill
 - **Friends, invites & notifications** — Discord-style `Name #TAG`, friend requests with ignore lists, room invites that pop up as toasts in real-time
 - **Bot opponents** — fill empty seats with Rookie / Medium / Ace bots; pure PL/pgSQL heuristics (offense, defense, jack discipline, 1-ply anticipation) running through the same server-authoritative path as humans
 - **Per-turn timer** — server-enforced via `pg_cron`; AFK players auto-discard so games don't stall
+- **Event-driven scheduling** — the turn/bot tick jobs are switched on when a game starts and off when the last game ends, so an idle database does zero polling
 - **Mobile-first responsive layout** — hamburger nav, landscape-rotated board, tap-friendly hand
-- **Storage hygiene** — finished games auto-delete after 5 minutes, stale guest accounts after 24 hours
+- **In-app feedback + admin dashboard** — players send feedback from the sidebar (rate-limited in the database); a gated `/admin` page shows signups, live rooms, completed-game trends and feedback
+- **Storage hygiene** — finished games auto-delete after 5 minutes, stale guest accounts after 24 hours, cron run history after 24 hours, feedback after 30 days
 
 ---
 
@@ -67,13 +69,28 @@ Lobby and game payloads carry the full **public** projection of the row (board, 
 
 ### Cron-managed lifecycle
 
+The two gameplay ticks are **event-driven**: triggers on `games` call
+`ensure_tick_jobs()`, which schedules them when a live game (or a live game
+with a bot) exists and unschedules them when the last one disappears. On an
+idle board they are absent from `cron.job` — that's normal, not a failure.
+Before this gating, the always-on ticks were 82% of all database execution
+time; real gameplay was under 2%.
+
 | Job | Schedule | Purpose |
 |---|---|---|
-| `sequence-tick-turns` | every 5s | Detect expired `turn_deadline`s and auto-discard for AFK players |
-| `sequence-tick-bots` | every 2s | Let bots whose think-delay elapsed take their turn |
-| `sequence-stale-cleanup` | every 5 min | Mark games inactive 30+ minutes as `finished` |
+| `sequence-tick-turns` | every 5s *while any game is live* | Detect expired `turn_deadline`s and auto-discard for AFK players |
+| `sequence-tick-bots` | every 2s *while a live game seats a bot* | Let bots whose think-delay elapsed take their turn |
+| `sequence-stale-cleanup` | every 5 min | Mark games inactive 30+ minutes as `finished`; re-assert tick scheduling (watchdog) |
 | `sequence-delete-finished` | every 5 min | Delete `finished` games + their move logs after 5 min |
-| `sequence-delete-stale-guests` | every hour | Delete anonymous `auth.users` inactive 24+ hours |
+| `sequence-delete-stale-rooms` | every 5 min | Delete rooms with no recent activity |
+| `sequence-delete-stale-guests` | hourly | Delete anonymous `auth.users` inactive 24+ hours |
+| `sequence-delete-orphan-bots` | hourly | Delete bot profiles with no seat |
+| `sequence-prune-cron-history` | hourly | Prune `cron.job_run_details` older than 24h (it once grew to 584 MB) |
+| `sequence-delete-old-feedback` | daily | Delete feedback older than 30 days |
+
+Both tick loops isolate each game in its own subtransaction, so one broken
+game is skipped with a warning instead of aborting the whole batch (which
+previously could freeze every bot on the site until the game was removed).
 
 ---
 
@@ -86,26 +103,32 @@ src/
       play/                  # Lobby home for logged-in users
       me/                    # Profile page
       friends/               # Friends + requests + ignored
+    admin/                   # Gated admin dashboard (stats, charts, users, feedback)
     auth/                    # Sign in / sign up / password reset
     guest/                   # Anonymous sign-in flow
+    join/[code]/             # Room-code deep link
     lobby/[code]/            # Pre-game room with team picker
     game/[id]/               # The actual game board + hand
-    rules/                   # Sequence rules reference
+    rules/ strategy/ faq/    # Public content pages (rules, tactics, FAQ)
     sitemap.ts robots.ts     # SEO
     page.tsx                 # Marketing landing
-  components/                # Shared UI (AppShell, sidebar, board, hand, etc.)
+  components/                # Shared UI (AppShell, sidebar, board, feedback modal, etc.)
   lib/
     auth/                    # Server-side auth helpers (cache()-deduped)
     supabase/                # Browser + server clients, middleware
     invites/                 # Room-invite server actions
+    feedback/                # Feedback server action
+    geo/                     # Country capture from the Vercel edge header
+    sound/                   # Game audio
     board-layout.ts          # Canonical 10×10 board layout
     board-helpers.ts         # Dead-card / classify-card utilities
 supabase/
   migrations/                # SQL migrations (the source of truth)
   config.toml                # Project config + linked ref
 tests/                       # SQL test scripts (run via admin API)
-PRD.md ROADMAP.md            # Product spec + build plan
-CLAUDE.md AGENTS.md          # Notes for the AI pair-programmers
+scripts/analytics/           # Saved SQL snippets + run.sh (Management API)
+docs/                        # Admin SQL playbook + exports
+CLAUDE.md                    # Working notes for AI pair-programmers
 ```
 
 ---
@@ -197,6 +220,10 @@ Available suites:
 | `tests/swap-dead-card.sql` | Dead-card swap: turn check, non-dead rejection, jack rejection, stale version |
 | `tests/deck-refill.sql` | Deck-empty reshuffle: drain → refill → multiset of cards preserved |
 | `tests/guest-mode.sql` | Anonymous sign-in trigger, friend/invite guards, 1-hour grace, 24-hour TTL |
+| `tests/turn-order.sql` | Team-alternating seat order for 2- and 3-team layouts |
+
+`$SUPABASE_PROJECT_REF` isn't in `.env.example` — it's the subdomain of
+`NEXT_PUBLIC_SUPABASE_URL` (or derive it the way `scripts/analytics/run.sh` does).
 
 Each suite returns one row per assertion with `PASS`/`OK`/`FAIL` so you can see exactly which step broke.
 
@@ -205,12 +232,6 @@ Each suite returns one row per assertion with `PASS`/`OK`/`FAIL` so you can see 
 ## Game rules
 
 Full ruleset (deck composition, jacks, corners, shared chips, dead cards, win conditions, deck refill) lives at [/rules](https://sequencr.app/rules) on the deployed site, with a comprehensive summary in [`CLAUDE.md`](./CLAUDE.md).
-
----
-
-## Roadmap
-
-The complete validation-gated build plan is in [`ROADMAP.md`](./ROADMAP.md). All seven phases (Foundation → Auth → Lobby → Rendering → First Move → Full Rules → Robustness → Polish) are checked off. Subsequent work — guest mode, friends, invites, deck indicator, mobile nav, SEO — is captured in the git log.
 
 ---
 
