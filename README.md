@@ -128,7 +128,7 @@ supabase/
 tests/                       # SQL test scripts (run via admin API)
 scripts/analytics/           # Saved SQL snippets + run.sh (Management API)
 docs/                        # Admin SQL playbook + exports
-CLAUDE.md                    # Working notes for AI pair-programmers
+CLAUDE.md                    # AI pair-programmer notes (untracked by design)
 ```
 
 ---
@@ -231,7 +231,7 @@ Each suite returns one row per assertion with `PASS`/`OK`/`FAIL` so you can see 
 
 ## Game rules
 
-Full ruleset (deck composition, jacks, corners, shared chips, dead cards, win conditions, deck refill) lives at [/rules](https://sequencr.app/rules) on the deployed site, with a comprehensive summary in [`CLAUDE.md`](./CLAUDE.md).
+Full ruleset (deck composition, jacks, corners, shared chips, dead cards, win conditions, deck refill) lives at [/rules](https://sequencr.app/rules) on the deployed site, with tactics at [/strategy](https://sequencr.app/strategy).
 
 ---
 
