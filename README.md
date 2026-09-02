@@ -19,6 +19,7 @@ A free, browser-native implementation of Jax's Sequence card-and-board game. 2�
 - **Per-turn timer** — server-enforced via `pg_cron`; AFK players auto-discard so games don't stall
 - **Event-driven scheduling** — the turn/bot tick jobs are switched on when a game starts and off when the last game ends, so an idle database does zero polling
 - **Mobile-first responsive layout** — hamburger nav, landscape-rotated board, tap-friendly hand
+- **One-time onboarding** — a skippable site tour (spotlight on desktop, cards on mobile), contextual rules coaching during your first game, and a post-game prompt to send feedback
 - **In-app feedback + admin dashboard** — players send feedback from the sidebar (rate-limited in the database); a gated `/admin` page shows signups, live rooms, completed-game trends and feedback
 - **Storage hygiene** — finished games auto-delete after 5 minutes, stale guest accounts after 24 hours, cron run history after 24 hours, feedback after 30 days
 
@@ -45,6 +46,30 @@ The whole app is built around one principle: **the server owns the truth, the cl
 ### Server-authoritative state
 
 Every game state mutation goes through a `SECURITY DEFINER` Postgres RPC — `play_move`, `play_wild`, `play_remove`, `swap_dead_card`, `start_game`, `join_room`, etc. RLS blocks direct INSERT/UPDATE/DELETE on `games`, `room_players`, `game_moves`, so a malicious client can't fake a move, a sequence, a chip removal, or a deal.
+
+### What a client is allowed to read
+
+The anon key ships in the browser bundle by design, and `authenticated`
+includes guests — anonymous sign-in issues a real JWT. So "logged-in users
+only" is not a restriction: assume every table read is reachable with
+`curl`, and let the database decide what comes back.
+
+RLS handles rows. Two tables also use **column-level grants**, which
+Postgres enforces underneath RLS:
+
+| Table | Withheld from clients | Why |
+|---|---|---|
+| `games` | `hands`, `deck` | A room member passes the row-level check. Without column grants they could read every opponent's hand and the deck order straight off the REST API. |
+| `profiles` | `is_admin`, `is_bot`, `last_activity_at`, bot/turn internals | SELECT is also narrowed to the caller's own row. It was previously `using (true)` — a full directory, `is_admin` included. |
+
+Anything genuinely needed about *other* players is served by a
+`SECURITY DEFINER` RPC returning a narrow projection — `search_users`
+gives back `user_id, display_name, tag, relationship` and nothing else.
+Those functions bypass both RLS and column grants, which is the point:
+one audited path instead of an open table.
+
+Consequence for contributors: **`select=*` on `games` or `profiles` fails**
+with `permission denied for column`. Name your columns, or add an RPC.
 
 ### Optimistic concurrency
 
@@ -92,6 +117,32 @@ Both tick loops isolate each game in its own subtransaction, so one broken
 game is skipped with a warning instead of aborting the whole batch (which
 previously could freeze every bot on the site until the game was removed).
 
+### Onboarding
+
+Four write-once flags on `profiles`, all written through a single
+`mark_onboarding(p_step)` RPC with a **step allowlist** — the anon key is
+public, so accepting a column name from the client would be a write
+primitive. Every branch is set-once, so replaying the tour from `/me`
+shows it again without disturbing the completion stats.
+
+- **Site tour** — runs on `/play` only, never over a lobby or a live game
+  where an overlay would sit on a running turn timer. Desktop spotlights
+  the real element (`data-tour="…"`) and tracks it through scroll and
+  resize; mobile renders the same content as cards, because the nav
+  dropdown unmounts its children when the menu closes. Anchors are
+  optional: a step whose target isn't on screen falls back to a centred
+  card, which is how the Friends step degrades for guests.
+- **Skip advances rather than dismisses.** The feedback pointer and the
+  tip jar live on a closing card *outside* the step sequence, so
+  dismissing the walkthrough doesn't dismiss them. Esc behaves the same,
+  then exits for real from the closing card.
+- **First-game coaching** — contextual hints for the two jacks and dead
+  cards, one at a time, on your own turn only, retiring on a tap or a
+  timer. Scoped to a single game whether or not every hint fired.
+- **Post-game nudge** — an inline line on the win card (not another
+  modal), and only when there was a real winner, so a game closed by the
+  stale sweeper never triggers it.
+
 ---
 
 ## Repository layout
@@ -112,12 +163,18 @@ src/
     rules/ strategy/ faq/    # Public content pages (rules, tactics, FAQ)
     sitemap.ts robots.ts     # SEO
     page.tsx                 # Marketing landing
-  components/                # Shared UI (AppShell, sidebar, board, feedback modal, etc.)
+  components/
+    game/                    # Board, hand strip, turn banner, win screen, coach marks
+    onboarding/              # First-run site tour (spotlight + card renderers)
+    ui/                      # Buttons, fields, wordmark, coffee button
+    app-shell.tsx            # Sidebar + tour mount for the authed route group
+    feedback-widget.tsx      # Feedback modal (controlled by its parent)
   lib/
     auth/                    # Server-side auth helpers (cache()-deduped)
     supabase/                # Browser + server clients, middleware
     invites/                 # Room-invite server actions
     feedback/                # Feedback server action
+    onboarding/              # Tour content + the one-time flag writer
     geo/                     # Country capture from the Vercel edge header
     sound/                   # Game audio
     board-layout.ts          # Canonical 10×10 board layout
