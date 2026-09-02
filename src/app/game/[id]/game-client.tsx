@@ -6,6 +6,9 @@ import { Board } from "@/components/game/board";
 import { HandStrip } from "@/components/game/hand-strip";
 import { TurnBanner } from "@/components/game/turn-banner";
 import { WinScreen, RematchActions } from "@/components/game/win-screen";
+import { CoachMarks } from "@/components/game/coach-marks";
+import { FeedbackModal } from "@/components/feedback-widget";
+import { markOnboarding } from "@/lib/onboarding/mark";
 import { classifyCard, isDeadCard } from "@/lib/board-layout";
 import { playTurnBlip } from "@/lib/sound/turn-blip";
 import { isMuted } from "@/components/game/mute-toggle";
@@ -60,10 +63,17 @@ export function GameClient({
   gameId,
   initialSnapshot,
   myUserId,
+  coachMarks = false,
+  feedbackNudge = false,
 }: {
   gameId: string;
   initialSnapshot: GameSnapshot;
   myUserId: string;
+  // Both are one-time, read from the profile at page render. They can only
+  // ever go from true to false within a session, so nothing here needs to
+  // watch for them changing underneath it.
+  coachMarks?: boolean;
+  feedbackNudge?: boolean;
 }) {
   const supabase = useMemo(() => createClient(), []);
 
@@ -84,6 +94,8 @@ export function GameClient({
   // plays, then it unmounts for real.
   const [resultsDismissed, setResultsDismissed] = useState(false);
   const [resultsClosing, setResultsClosing] = useState(false);
+  const [coachDone, setCoachDone] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const online = useBrowserOnline();
 
   function dismissResults() {
@@ -270,6 +282,31 @@ export function GameClient({
   const interactable =
     myTurn && !submitting && burningIdx == null && !gameFinished;
 
+  /* --------------------------------------------------- onboarding */
+
+  const coachActive = coachMarks && !coachDone && !gameFinished;
+
+  const finishCoach = useCallback(() => {
+    setCoachDone(true);
+    void markOnboarding(myUserId, "coach_done");
+  }, [myUserId]);
+
+  // Coaching is scoped to one game, whether or not every hint got a chance
+  // to fire. Someone who never drew a jack should not be followed into
+  // their second game by a tip about jacks.
+  useEffect(() => {
+    if (gameFinished && coachMarks) void markOnboarding(myUserId, "coach_done");
+  }, [gameFinished, coachMarks, myUserId]);
+
+  // Only after a game someone actually finished. A game killed by the
+  // 30-minute stale sweeper has winnerTeam null, and asking for feedback
+  // on the back of that is asking at the worst possible moment.
+  const showNudge = feedbackNudge && gameFinished && game.winnerTeam != null;
+
+  useEffect(() => {
+    if (showNudge) void markOnboarding(myUserId, "nudge_seen");
+  }, [showNudge, myUserId]);
+
   function handleRpcError(rpcError: { code?: string; message: string }) {
     setSubmitting(false);
     if (rpcError.code === "40001") {
@@ -423,6 +460,21 @@ export function GameClient({
     <>
       <ConnectionPill show={channelDown || !online} />
 
+      <CoachMarks
+        active={coachActive}
+        myTurn={myTurn}
+        hand={hand}
+        board={game.board}
+        onDone={finishCoach}
+      />
+
+      {/* Opened from the win card's post-game line. Lives at the top level
+          of the game page, so nothing it depends on can unmount under it. */}
+      <FeedbackModal
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+      />
+
       {/* Results overlay: floats above the dimmed board so the layout
           never reflows. Click outside (or "view final board") to peek at
           the finished board; the strip's button brings it back. Inline
@@ -450,6 +502,9 @@ export function GameClient({
               roomId={initialSnapshot.roomId}
               roomCode={initialSnapshot.roomCode}
               onViewBoard={dismissResults}
+              onFeedback={
+                showNudge ? () => setFeedbackOpen(true) : undefined
+              }
             />
           </div>
         </div>

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { SoftButton } from "@/components/ui/button";
@@ -42,6 +43,18 @@ export default async function MePage() {
           }
         />
       </dl>
+
+      {/* Skipping the tour is permanent, so this is the way back to it.
+          The flag is set-once server-side: replaying shows the walkthrough
+          again without resetting what the admin funnel counted. */}
+      <div className="mt-6">
+        <Link
+          href="/play?tour=1"
+          className="text-[13px] font-semibold text-ink-soft underline-offset-4 hover:text-ink hover:underline"
+        >
+          Replay the site tour
+        </Link>
+      </div>
 
       <form action={signOutAction} className="mt-8">
         <SoftButton variant="outline" type="submit">

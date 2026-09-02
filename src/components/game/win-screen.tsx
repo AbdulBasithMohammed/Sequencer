@@ -96,12 +96,19 @@ export function WinScreen({
   roomId,
   roomCode,
   onViewBoard,
+  onFeedback,
 }: {
   winnerTeam: number | null;
   players: RosterPlayer[];
   roomId: string | null;
   roomCode: string | null;
   onViewBoard?: () => void;
+  // Set only for a player's first completed game, and only when there was
+  // a real winner. Deliberately an inline line rather than a second modal:
+  // the caller is already an overlay, and stacking a dialog on top of the
+  // rematch buttons would put a request in front of the thing they most
+  // likely want to click next.
+  onFeedback?: () => void;
 }) {
   const me = players.find((p) => p.is_me) ?? null;
   const myTeam = me?.team ?? null;
@@ -217,6 +224,26 @@ export function WinScreen({
         >
           View the final board
         </button>
+      ) : null}
+
+      {onFeedback ? (
+        <div className="mt-1 w-full border-t border-line pt-3.5">
+          {/* Deliberately not "your first game" — the flag starts null for
+              accounts that predate it, so this fires on the next finished
+              game for people who have played plenty. */}
+          <p className="text-[12px] leading-[1.5] text-ink-soft">
+            Now that you&apos;ve played a full game — anything confusing,
+            broken, or missing?{" "}
+            <button
+              type="button"
+              onClick={onFeedback}
+              className="font-semibold text-ink underline underline-offset-4 hover:opacity-80"
+            >
+              Tell me about it
+            </button>{" "}
+            — it goes straight to the person building this.
+          </p>
+        </div>
       ) : null}
     </div>
   );

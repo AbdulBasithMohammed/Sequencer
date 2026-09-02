@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentUser } from "@/lib/auth/me";
+import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 import { GameClient } from "./game-client";
 import { parseSnapshot } from "./snapshot";
@@ -24,6 +24,10 @@ export default async function GamePage({
   // re-run this server component.
   const user = await getCurrentUser();
   if (!user) redirect("/auth?mode=signin");
+
+  // Onboarding flags ride along on the profile fetch, which is cache()-deduped
+  // per request — so this costs nothing beyond the columns themselves.
+  const profile = await getCurrentProfile();
 
   const supabase = await createClient();
   const { data } = await supabase.rpc("get_game_snapshot", {
@@ -49,7 +53,13 @@ export default async function GamePage({
         </div>
       </header>
 
-      <GameClient gameId={id} initialSnapshot={snapshot} myUserId={user.id} />
+      <GameClient
+        gameId={id}
+        initialSnapshot={snapshot}
+        myUserId={user.id}
+        coachMarks={!profile?.coach_marks_done_at}
+        feedbackNudge={!profile?.feedback_nudge_seen_at}
+      />
     </div>
   );
 }

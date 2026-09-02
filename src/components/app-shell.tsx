@@ -1,6 +1,9 @@
+import { Suspense } from "react";
 import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { recordCountryOnce } from "@/lib/geo/record";
+import { isExistingUser } from "@/lib/onboarding/steps";
+import { OnboardingTour } from "@/components/onboarding/tour";
 import { AppSidebar } from "./app-sidebar";
 
 // Server-side data fetcher. Hands the sidebar to a client component
@@ -32,6 +35,20 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         isGuest={profile?.is_guest ?? false}
       />
       <main className="overflow-hidden">{children}</main>
+
+      {/* Mounted for every authed page in this group, but gates itself to
+          /play — never over a live game or a lobby. Sitting here rather
+          than inside AppSidebar keeps it clear of the mobile dropdown,
+          which unmounts its children when the menu closes.
+          Suspense because it reads searchParams for the ?tour=1 replay. */}
+      <Suspense fallback={null}>
+        <OnboardingTour
+          userId={user.id}
+          isGuest={profile?.is_guest ?? false}
+          existingUser={isExistingUser(profile?.created_at)}
+          alreadySeen={Boolean(profile?.tour_seen_at)}
+        />
+      </Suspense>
     </div>
   );
 }

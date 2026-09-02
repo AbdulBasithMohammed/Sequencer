@@ -43,7 +43,10 @@ export default async function PlayPage({
         </h1>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
+      <div
+        data-tour="play-create"
+        className="grid gap-4 lg:grid-cols-[1.3fr_1fr]"
+      >
         <CreateRoomCard />
         <JoinRoomCard />
       </div>

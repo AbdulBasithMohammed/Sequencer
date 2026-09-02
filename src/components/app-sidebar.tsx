@@ -7,10 +7,25 @@ import { Wordmark } from "@/components/ui/wordmark";
 import { CoffeeButton } from "@/components/ui/coffee-button";
 import { FeedbackModal } from "@/components/feedback-widget";
 
-const BASE_NAV = [
+// `tour` marks an item as an onboarding spotlight target. The attribute is
+// emitted on both the mobile and desktop copies of the nav; the tour picks
+// whichever one is actually laid out at the current width.
+type NavItem = {
+  href: string;
+  label: string;
+  registeredOnly?: boolean;
+  tour?: string;
+};
+
+const BASE_NAV: NavItem[] = [
   { href: "/play", label: "Play" },
-  { href: "/rules", label: "How it works" },
-  { href: "/friends", label: "Friends", registeredOnly: true },
+  { href: "/rules", label: "How it works", tour: "nav-rules" },
+  {
+    href: "/friends",
+    label: "Friends",
+    registeredOnly: true,
+    tour: "nav-friends",
+  },
   { href: "/me", label: "Profile" },
 ];
 
@@ -30,9 +45,7 @@ export function AppSidebar({
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
-  const nav = BASE_NAV.filter(
-    (item) => !("registeredOnly" in item && item.registeredOnly && isGuest),
-  );
+  const nav = BASE_NAV.filter((item) => !(item.registeredOnly && isGuest));
 
   // Auto-close the mobile dropdown when a nav link is clicked — handled
   // on the event instead of a pathname effect so navigation doesn't
@@ -42,6 +55,7 @@ export function AppSidebar({
       key={item.href}
       href={item.href}
       prefetch
+      data-tour={item.tour}
       onClick={() => setOpen(false)}
       className={`flex items-center justify-between rounded-xl px-3.5 py-2.5 text-[14px] font-semibold ${
         isActive(item.href)
@@ -74,7 +88,10 @@ export function AppSidebar({
   );
 
   const userCard = (
-    <div className="rounded-2xl border border-line bg-surface p-3.5">
+    <div
+      data-tour="user-card"
+      className="rounded-2xl border border-line bg-surface p-3.5"
+    >
       <Link href="/me" className="flex items-center gap-2.5 hover:opacity-80">
         <div
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-display font-bold text-canvas"

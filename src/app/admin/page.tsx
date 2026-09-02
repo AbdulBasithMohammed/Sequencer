@@ -54,6 +54,14 @@ type Feedback = {
 
 type FeedbackTotals = { total: number; last_24h: number; last_7d: number };
 
+type Onboarding = {
+  eligible: number;
+  tour_seen: number;
+  tour_skipped: number;
+  coach_done: number;
+  nudge_seen: number;
+};
+
 const TABS = ["overview", "feedback", "users"] as const;
 type Tab = (typeof TABS)[number];
 const RANGES = [7, 30, 90];
@@ -141,17 +149,19 @@ async function OverviewTab({
   o: Overview | null;
   range: number;
 }) {
-  const [roomsRes, signupsRes, totalsRes, gamesRes] = await Promise.all([
+  const [roomsRes, signupsRes, totalsRes, gamesRes, onbRes] = await Promise.all([
     supabase.rpc("admin_active_rooms"),
     supabase.rpc("admin_signups_by_day", { p_days: range }),
     supabase.rpc("admin_game_totals"),
     supabase.rpc("admin_games_by_day", { p_days: range }),
+    supabase.rpc("admin_onboarding"),
   ]);
 
   const rooms = (roomsRes.data ?? []) as RoomRow[];
   const signups = ((signupsRes.data ?? []) as SignupDay[]).slice().reverse();
   const totals = (totalsRes.data?.[0] ?? null) as GameTotals | null;
   const games = ((gamesRes.data ?? []) as GameDay[]).slice().reverse();
+  const onb = (onbRes.data?.[0] ?? null) as Onboarding | null;
   const liveRooms = rooms.filter((r) => r.has_live_game).length;
 
   return (
@@ -272,6 +282,32 @@ async function OverviewTab({
           />
         </Card>
       </div>
+
+      {/* Denominator is every non-bot account, including everyone who
+          predates onboarding — so these climb as old accounts come back,
+          and "finished the tour" is deliberately net of skips. */}
+      <Card title="Onboarding" className="mt-4">
+        <MiniRow
+          label="Finished the tour"
+          value={(onb?.tour_seen ?? 0) - (onb?.tour_skipped ?? 0)}
+          of={onb?.eligible ?? 0}
+        />
+        <MiniRow
+          label="Skipped it"
+          value={onb?.tour_skipped ?? 0}
+          of={onb?.eligible ?? 0}
+        />
+        <MiniRow
+          label="Played a first game"
+          value={onb?.coach_done ?? 0}
+          of={onb?.eligible ?? 0}
+        />
+        <MiniRow
+          label="Saw the feedback nudge"
+          value={onb?.nudge_seen ?? 0}
+          of={onb?.eligible ?? 0}
+        />
+      </Card>
 
       {rooms.length > 0 ? (
         <Card title={`Live rooms · ${rooms.length}`} className="mt-4">
