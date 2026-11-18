@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { CoffeeButton } from "@/components/ui/coffee-button";
 import { FeedbackModal } from "@/components/feedback-widget";
@@ -34,15 +34,22 @@ export function AppSidebar({
   initial,
   signOut,
   isGuest,
+  unreadReplies,
 }: {
   handle: string;
   initial: string;
   signOut: () => Promise<void>;
   isGuest: boolean;
+  unreadReplies: number;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  // Seeded from the server on the shell's render; the shell stays mounted
+  // across tabs, so this only refreshes on a full load. Cleared locally
+  // once the modal marks replies seen.
+  const [unread, setUnread] = useState(unreadReplies);
+  const clearUnread = useCallback(() => setUnread(0), []);
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
   const nav = BASE_NAV.filter((item) => !(item.registeredOnly && isGuest));
@@ -91,9 +98,18 @@ export function AppSidebar({
         setFeedbackOpen(true);
         setOpen(false);
       }}
-      className="w-full rounded-xl border border-line bg-canvas px-3 py-2 text-[12px] font-semibold text-ink-soft transition-colors hover:bg-line/60 hover:text-ink"
+      className={`flex w-full items-center justify-center gap-2 rounded-xl border bg-canvas px-3 py-2 text-[12px] font-semibold transition-colors hover:bg-line/60 hover:text-ink ${
+        unread > 0 ? "border-ink-soft text-ink" : "border-line text-ink-soft"
+      }`}
     >
-      Send feedback
+      {unread > 0 ? (
+        <>
+          <span className="inline-block h-2 w-2 rounded-full bg-pink" aria-hidden />
+          {unread === 1 ? "New reply to your feedback" : `${unread} new replies`}
+        </>
+      ) : (
+        "Send feedback"
+      )}
     </button>
   );
 
@@ -145,9 +161,17 @@ export function AppSidebar({
             onClick={() => setOpen((o) => !o)}
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface text-ink"
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-line bg-surface text-ink"
           >
             {open ? <CloseIcon /> : <HamburgerIcon />}
+            {/* The feedback button lives inside the closed dropdown on
+                phones, so surface the unread reply on the toggle too. */}
+            {unread > 0 && !open ? (
+              <span
+                className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-canvas bg-pink"
+                aria-label="New reply to your feedback"
+              />
+            ) : null}
           </button>
         </header>
         {open && (
@@ -178,6 +202,8 @@ export function AppSidebar({
       <FeedbackModal
         open={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}
+        unread={unread}
+        onRepliesSeen={clearUnread}
       />
     </>
   );

@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import {
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from "react";
+import { useRouter } from "next/navigation";
+import { replyToFeedback } from "./actions";
 import { fmtAgo, fmtDateTime } from "./format";
 import { Pill } from "./ui";
 
@@ -21,6 +28,12 @@ export type Feedback = {
   body: string;
   page: string | null;
   created_at: string;
+  author_gone: boolean;
+  parent_id: string | null;
+  parent_body: string | null;
+  reply_body: string | null;
+  replied_at: string | null;
+  reply_seen_at: string | null;
 };
 
 const EVENT = "sequencr:admin-feedback-read";
@@ -108,7 +121,7 @@ export function UnreadCount({
   return <>{ready ? count : "–"}</>;
 }
 
-type Filter = "all" | "registered" | "guests" | "unread";
+type Filter = "all" | "registered" | "guests" | "unread" | "unanswered";
 
 export function FeedbackInbox({
   userId,
@@ -133,6 +146,7 @@ export function FeedbackInbox({
       all: items.length,
       registered: items.filter((f) => !f.was_guest).length,
       guests: items.filter((f) => f.was_guest).length,
+      unanswered: items.filter((f) => !f.reply_body && !f.author_gone).length,
     }),
     [items],
   );
@@ -144,7 +158,9 @@ export function FeedbackInbox({
         ? f.was_guest
         : filter === "unread"
           ? isUnread(f)
-          : true,
+          : filter === "unanswered"
+            ? !f.reply_body && !f.author_gone
+            : true,
   );
 
   const newest = items.reduce<string | null>(
@@ -155,6 +171,7 @@ export function FeedbackInbox({
   const chips: [Filter, string, number][] = [
     ["all", "All", counts.all],
     ["unread", "Unread", unread],
+    ["unanswered", "Unanswered", counts.unanswered],
     ["registered", "Registered", counts.registered],
     ["guests", "Guests", counts.guests],
   ];
@@ -233,6 +250,11 @@ export function FeedbackInbox({
                       <span className="truncate font-mono">{f.page}</span>
                     ) : null}
                   </div>
+                  {f.parent_body ? (
+                    <p className="mt-1.5 truncate border-l-2 border-line pl-2 text-xs text-ink-soft">
+                      Following up on: {f.parent_body}
+                    </p>
+                  ) : null}
                   <p
                     className={`mt-1.5 whitespace-pre-wrap break-words text-sm ${
                       f.was_guest ? "text-ink-soft" : ""
@@ -240,6 +262,7 @@ export function FeedbackInbox({
                   >
                     {f.body}
                   </p>
+                  <ReplyBox item={f} now={now} />
                 </article>
               </li>
             );
@@ -255,5 +278,137 @@ export function FeedbackInbox({
         </p>
       )}
     </div>
+  );
+}
+
+function ReplyBox({ item, now }: { item: Feedback; now: number }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(item.reply_body ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function save(body: string) {
+    if (pending) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await replyToFeedback(item.id, body);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      setEditing(false);
+      router.refresh();
+    });
+  }
+
+  if (item.author_gone && !item.reply_body) {
+    return (
+      <p className="mt-2 text-[11px] text-ink-soft">
+        Can&apos;t reply — the author&apos;s account is gone
+        {item.was_guest ? " (guest expired)" : ""}.
+      </p>
+    );
+  }
+
+  if (editing) {
+    return (
+      <div className="mt-3">
+        <textarea
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.slice(0, 2000))}
+          rows={3}
+          maxLength={2000}
+          placeholder="Write a reply they'll see in their feedback panel"
+          className="w-full resize-none rounded-2xl border border-line bg-canvas px-3 py-2 text-sm outline-none focus:border-ink-soft"
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => save(draft)}
+            disabled={pending || draft.trim().length === 0}
+            className="rounded-full bg-ink px-4 py-1.5 text-xs font-medium text-canvas disabled:opacity-40"
+          >
+            {pending ? "Sending…" : item.reply_body ? "Save reply" : "Send reply"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditing(false);
+              setDraft(item.reply_body ?? "");
+              setError(null);
+            }}
+            disabled={pending}
+            className="rounded-full border border-line px-4 py-1.5 text-xs text-ink-soft hover:text-ink"
+          >
+            Cancel
+          </button>
+          {item.reply_body ? (
+            <button
+              type="button"
+              onClick={() => save("")}
+              disabled={pending}
+              className="ml-auto text-xs text-ink-soft underline hover:text-ink"
+            >
+              Remove reply
+            </button>
+          ) : null}
+          <span className="text-[11px] tabular-nums text-ink-soft">
+            {draft.length}/2000
+          </span>
+        </div>
+        {error ? (
+          <p className="mt-2 text-xs text-ink" role="alert">
+            {error}
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  if (item.reply_body) {
+    return (
+      <div className="mt-3 rounded-xl border border-line bg-canvas px-3 py-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-ink-soft">
+          <span className="font-medium text-ink">Your reply</span>
+          {item.replied_at ? (
+            <span title={fmtDateTime(item.replied_at)}>
+              {fmtAgo(item.replied_at, now)}
+            </span>
+          ) : null}
+          {item.reply_seen_at ? (
+            <Pill tone="mint">seen {fmtAgo(item.reply_seen_at, now)}</Pill>
+          ) : (
+            <Pill>not seen yet</Pill>
+          )}
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="ml-auto underline hover:text-ink"
+          >
+            Edit
+          </button>
+        </div>
+        <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+          {item.reply_body}
+        </p>
+        {item.author_gone ? (
+          <p className="mt-1 text-[11px] text-ink-soft">
+            The author&apos;s account is gone, so this won&apos;t be seen.
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="mt-2 rounded-full border border-line bg-surface px-3 py-1 text-xs text-ink-soft hover:border-ink-soft hover:text-ink"
+    >
+      Reply
+    </button>
   );
 }

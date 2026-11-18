@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { signOutAction } from "@/lib/auth/actions";
 import { getCurrentProfile, getCurrentUser } from "@/lib/auth/me";
 import { recordCountryOnce } from "@/lib/geo/record";
+import { createClient } from "@/lib/supabase/server";
 import { isExistingUser } from "@/lib/onboarding/steps";
 import { OnboardingTour } from "@/components/onboarding/tour";
 import { AppSidebar } from "./app-sidebar";
@@ -14,7 +15,10 @@ import { AppSidebar } from "./app-sidebar";
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
   if (!user) return <>{children}</>;
-  const profile = await getCurrentProfile();
+  const [profile, unreadReplies] = await Promise.all([
+    getCurrentProfile(),
+    getUnreadReplies(),
+  ]);
 
   // One write per account, ever. Skipped entirely once set, which is
   // also what backfills the accounts that existed before this shipped —
@@ -33,6 +37,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
         initial={initial}
         signOut={signOutAction}
         isGuest={profile?.is_guest ?? false}
+        unreadReplies={unreadReplies}
       />
       <main className="overflow-hidden">{children}</main>
 
@@ -51,4 +56,13 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       </Suspense>
     </div>
   );
+}
+
+// Admin replies the player hasn't opened yet. A partial-index probe; a
+// failure just means no dot, never a broken shell.
+async function getUnreadReplies() {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("my_feedback_unread");
+  if (error || typeof data !== "number") return 0;
+  return data;
 }
