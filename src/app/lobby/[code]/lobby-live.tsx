@@ -70,6 +70,39 @@ export function LobbyLive({
   const roomId = initialRoom.id;
   const roomCode = initialRoom.code;
 
+  // While THIS client's own Start game is in flight, its server action
+  // redirects into the game and renders it in the same response. The
+  // game_started broadcast lands before that response does; pushing on it
+  // too fetched and rendered the game page a second time, competing with
+  // the redirect on the host's critical path. So the host defers to the
+  // redirect, with a fallback push in case it never lands. The timer dies
+  // with the lobby when the redirect succeeds.
+  const startingRef = useRef(false);
+  const fallbackTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (fallbackTimer.current) window.clearTimeout(fallbackTimer.current);
+    },
+    [],
+  );
+  const goToGame = useCallback(
+    (gameId: string) => {
+      if (!startingRef.current) {
+        router.push(`/game/${gameId}`);
+        return;
+      }
+      if (fallbackTimer.current) return;
+      fallbackTimer.current = window.setTimeout(
+        () => router.push(`/game/${gameId}`),
+        4000,
+      );
+    },
+    [router],
+  );
+  const handleStartPending = useCallback((pending: boolean) => {
+    startingRef.current = pending;
+  }, []);
+
   // Broadcasts must be strictly newer. A snapshot is the authoritative
   // read, so it also applies at an EQUAL version: that's what lets the
   // subscribe-time reconcile repair a bad initial render instead of
@@ -103,14 +136,14 @@ export function LobbyLive({
       const snap = data as LobbyPayload;
       // A game started while we weren't listening — go play it.
       if (snap.room?.status === "in_game" && snap.game_id) {
-        router.push(`/game/${snap.game_id}`);
+        goToGame(snap.game_id);
         return;
       }
       applyIfNewer(snap, { allowEqual: true });
     } finally {
       reconcileInFlight.current = false;
     }
-  }, [supabase, roomId, router, applyIfNewer]);
+  }, [supabase, roomId, goToGame, applyIfNewer]);
 
   useEffect(() => {
     const channel = supabase
@@ -126,7 +159,7 @@ export function LobbyLive({
       .on("broadcast", { event: "game_started" }, (msg) => {
         const gameId = (msg.payload as { game_id?: string } | undefined)
           ?.game_id;
-        if (gameId) router.push(`/game/${gameId}`);
+        if (gameId) goToGame(gameId);
       })
       .on("broadcast", { event: "player_removed" }, async (msg) => {
         const removedUserId = (msg.payload as { user_id?: string } | undefined)
@@ -174,7 +207,7 @@ export function LobbyLive({
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [supabase, roomId, roomCode, currentUserId, router, applyIfNewer, reconcile]);
+  }, [supabase, roomId, roomCode, currentUserId, router, applyIfNewer, reconcile, goToGame]);
 
   // Regained network: the channel rejoins on its own, but the lobby may
   // have moved while we were dark — resync immediately.
@@ -197,6 +230,7 @@ export function LobbyLive({
         players={players}
         bans={bans}
         currentUserId={currentUserId}
+        onStartPending={handleStartPending}
       />
     </>
   );

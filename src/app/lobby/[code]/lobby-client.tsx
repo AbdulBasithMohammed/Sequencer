@@ -153,11 +153,15 @@ export function LobbyClient({
   players,
   bans,
   currentUserId,
+  onStartPending,
 }: {
   room: Room;
   players: Player[];
   bans: Ban[];
   currentUserId: string;
+  // Tells LobbyLive this client's own start is in flight, so it lets the
+  // action's redirect navigate instead of also pushing on the broadcast.
+  onStartPending?: (pending: boolean) => void;
 }) {
   const [optimisticPlayers, addOptimistic] = useOptimistic(
     players,
@@ -270,12 +274,26 @@ export function LobbyClient({
   const handleStart = () => {
     if (starting) return;
     setStartError(null);
+    onStartPending?.(true);
     startStart(async () => {
       // On success the action redirects; the transition stays pending
       // through the navigation, so the button stays locked until the
       // game page takes over.
-      const res = await startGameAction(fd({ code: room.code }));
-      if (res?.error) setStartError(res.error);
+      try {
+        const res = await startGameAction(fd({ code: room.code }));
+        if (res?.error) {
+          setStartError(res.error);
+          onStartPending?.(false);
+        }
+      } catch (e) {
+        // Let Next's redirect signal through untouched; anything else is
+        // a real failure (network, server error) — unlock and say so.
+        if ((e as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) {
+          throw e;
+        }
+        setStartError("Couldn't reach the server. Try again.");
+        onStartPending?.(false);
+      }
     });
   };
 

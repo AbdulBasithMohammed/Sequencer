@@ -31,13 +31,14 @@ export default async function GamePage({
   if (!user) redirect("/auth?mode=signin");
 
   // Onboarding flags ride along on the profile fetch, which is cache()-deduped
-  // per request — so this costs nothing beyond the columns themselves.
-  const profile = await getCurrentProfile();
-
+  // per request. It and the snapshot are independent, so they run in
+  // parallel — this render sits on the Start game critical path (the
+  // action's redirect renders it inline), and each read is a round trip.
   const supabase = await createClient();
-  const { data } = await supabase.rpc("get_game_snapshot", {
-    p_game_id: id,
-  });
+  const [profile, { data }] = await Promise.all([
+    getCurrentProfile(),
+    supabase.rpc("get_game_snapshot", { p_game_id: id }),
+  ]);
   const snapshot = parseSnapshot(data, user.id);
   if (!snapshot) redirect("/play");
 
