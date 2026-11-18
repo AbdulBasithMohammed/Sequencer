@@ -12,9 +12,9 @@
   --color-butter: #ffd23f;
   --color-mint: #7bd8b5;
   --color-line-strong: #efe3ce;
-  /* Game page only. White cards on the cream canvas had almost no
-     contrast (guest feedback), so the table is a toasted step darker and
-     hand cards carry a defined edge plus a thickness lip. */
+  /* Game table. White cards on the cream canvas had almost no contrast
+     (guest feedback), so board + hand sit on a toasted surface and hand
+     cards carry a defined edge plus a thickness lip. */
   --color-table: #ecdcc3;
   --color-card-edge: #cdb690;
   --color-card-lip: #d9c4a2;
@@ -108,14 +108,6 @@ body {
   font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   letter-spacing: -0.005em;
-}
-
-/* The game page sits on the toasted table colour. Scoped with :has() so
-   it covers the whole viewport (overscroll included) and reverts on its
-   own when client navigation unmounts the game. */
-:root:has([data-table-page]),
-:root:has([data-table-page]) body {
-  background: var(--color-table);
 }
 
 /* iOS Safari: kill the 300ms tap delay and prevent double-tap-to-zoom on

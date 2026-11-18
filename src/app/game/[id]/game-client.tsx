@@ -47,6 +47,10 @@ import {
 // pg_cron ticks every 5s; give the server that plus delivery slack before
 // concluding we missed the deadline broadcast.
 const DEADLINE_GRACE_MS = 8_000;
+// Board width, shared by the board box and the table surface that wraps
+// board + hand. The table pads it so the two stay in step at every size.
+const BOARD_WIDTH = "min(96vw, calc((100dvh - 280px) * 70 / 50), 1100px)";
+const TABLE_PAD = "min(2vw, 12px)";
 
 const WIN_TEAM_COLOR: Record<number, string> = {
   1: "var(--color-pink)",
@@ -583,11 +587,23 @@ export function GameClient({
         // right and sat visibly off-center.
         className="-mx-6 lg:-mx-10"
       >
+      {/* Table surface behind board + hand only. White cards on the cream
+          page had almost no contrast (guest feedback); toasting the whole
+          page instead made the lobby → game hop feel like a theme change.
+          Full-bleed on phones, a rounded table from sm up. */}
+      <div
+        className="mx-auto bg-table sm:rounded-[28px] sm:border sm:border-card-lip/60"
+        style={{
+          width: `calc(${BOARD_WIDTH} + 2 * ${TABLE_PAD})`,
+          maxWidth: "100%",
+          padding: `${TABLE_PAD} ${TABLE_PAD} 0`,
+        }}
+      >
         <div
           className="relative mx-auto"
           style={{
             aspectRatio: "70 / 50",
-            width: "min(96vw, calc((100dvh - 280px) * 70 / 50), 1100px)",
+            width: BOARD_WIDTH,
           }}
         >
           <div
@@ -609,24 +625,25 @@ export function GameClient({
             />
           </div>
         </div>
-      </div>
-      <div className="mt-1">
-        <div className="mb-1 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
-          Your hand
-          {gameFinished ? null : !myTurn ? (
-            <span className="ml-2 font-normal normal-case tracking-normal text-ink-soft">
-              · waiting on{" "}
-              {players.find((p) => p.seat_index === game.turnSeat)
-                ?.display_name ?? "another player"}
-            </span>
-          ) : null}
+        <div className="mt-1">
+          <div className="mb-1 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
+            Your hand
+            {gameFinished ? null : !myTurn ? (
+              <span className="ml-2 font-normal normal-case tracking-normal text-ink-soft">
+                · waiting on{" "}
+                {players.find((p) => p.seat_index === game.turnSeat)
+                  ?.display_name ?? "another player"}
+              </span>
+            ) : null}
+          </div>
+          <HandStrip
+            cards={hand}
+            selectedIdx={selectedIdx}
+            onSelect={handleSelect}
+            burningIdx={burningIdx}
+          />
         </div>
-        <HandStrip
-          cards={hand}
-          selectedIdx={selectedIdx}
-          onSelect={handleSelect}
-          burningIdx={burningIdx}
-        />
+      </div>
       </div>
       {/* Fixed-height hint slot: reserves vertical space so toggling
           selection doesn't shift the hand + board above it. */}
