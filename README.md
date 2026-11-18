@@ -70,6 +70,10 @@ one audited path instead of an open table.
 
 Consequence for contributors: **`select=*` on `games` or `profiles` fails**
 with `permission denied for column`. Name your columns, or add an RPC.
+The same applies to embeds: `room_players?select=*,profiles(display_name)`
+returns null names for everyone but you, and naming a withheld column
+fails the whole query. Other players' names come from RPCs such as
+`get_lobby_snapshot` and `get_room_bans`.
 
 ### Optimistic concurrency
 
@@ -150,24 +154,24 @@ shows it again without disturbing the completion stats.
 ```
 src/
   app/                       # Next.js App Router
-    (app)/                   # Authed route group with shared AppShell layout
+    (app)/                   # Nav route group: one AppShell kept mounted across tabs
       play/                  # Lobby home for logged-in users
       me/                    # Profile page
       friends/               # Friends + requests + ignored
+      rules/ strategy/ faq/  # Public content pages (shell only when signed in)
     admin/                   # Gated admin dashboard (stats, charts, users, feedback)
     auth/                    # Sign in / sign up / password reset
     guest/                   # Anonymous sign-in flow
     join/[code]/             # Room-code deep link
     lobby/[code]/            # Pre-game room with team picker
     game/[id]/               # The actual game board + hand
-    rules/ strategy/ faq/    # Public content pages (rules, tactics, FAQ)
     sitemap.ts robots.ts     # SEO
     page.tsx                 # Marketing landing
   components/
     game/                    # Board, hand strip, turn banner, win screen, coach marks
     onboarding/              # First-run site tour (spotlight + card renderers)
     ui/                      # Buttons, fields, wordmark, coffee button
-    app-shell.tsx            # Sidebar + tour mount for the authed route group
+    app-shell.tsx            # Sidebar + tour mount for the (app) route group
     feedback-widget.tsx      # Feedback modal (controlled by its parent)
   lib/
     auth/                    # Server-side auth helpers (cache()-deduped)
@@ -195,7 +199,7 @@ CLAUDE.md                    # AI pair-programmer notes (untracked by design)
 ### Prerequisites
 
 - **Node 20+** and **npm**
-- **Supabase CLI** ([install](https://supabase.com/docs/guides/cli)) — we use v2.98+ locally; the project is linked to a hosted Supabase instance, no local Postgres needed
+- **Supabase CLI v2** ([install](https://supabase.com/docs/guides/cli), or run it as `npx supabase@2`) — the project is linked to a hosted Supabase instance, no local Postgres needed. CLI 3.x currently refuses `supabase/config.toml` (its `[inbucket]` section was renamed `[local_smtp]` in v3), so stay on v2 until that config is migrated
 - A Supabase project of your own if you want to develop against a fresh database
 
 ### Setup

@@ -16,9 +16,17 @@ FILE="${1:?usage: run.sh <snippet-name|path.sql>}"
 [ -f "$FILE" ] || FILE="scripts/analytics/$FILE.sql"
 [ -f "$FILE" ] || { echo "no such snippet: $1" >&2; ls scripts/analytics/*.sql | sed 's#.*/##; s#\.sql$##' >&2; exit 1; }
 
-python3 - "$FILE" <<'PY' | curl -s -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
+# On Windows `python3` is often the Microsoft Store stub, which exists on
+# PATH but fails. Probe for one that actually runs.
+PY=""
+for cand in python3 python; do
+  if "$cand" -c "" >/dev/null 2>&1; then PY="$cand"; break; fi
+done
+[ -n "$PY" ] || { echo "no working python3/python on PATH" >&2; exit 1; }
+
+"$PY" - "$FILE" <<'PY' | curl -s -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
   -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-  -H "Content-Type: application/json" --data @- | python3 -m json.tool
+  -H "Content-Type: application/json" --data @- | "$PY" -m json.tool
 import json, sys
 print(json.dumps({"query": open(sys.argv[1]).read()}))
 PY
