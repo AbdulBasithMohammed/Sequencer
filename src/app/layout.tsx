@@ -41,7 +41,11 @@ export const metadata: Metadata = {
   authors: [{ name: "Sequencr" }],
   openGraph: {
     type: "website",
-    url: SITE_URL,
+    // No og:url, for the same reason as the canonical below: it would be
+    // inherited by every page, and Facebook and some chat apps treat
+    // og:url as the shared link's real address, so a /join/CODE invite
+    // could unfurl as (or link back to) the homepage. Without it, they
+    // use the URL that was actually shared.
     siteName: "Sequencr",
     title: "Play Sequence Online — Sequencr",
     description:
