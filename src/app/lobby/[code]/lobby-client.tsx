@@ -252,9 +252,30 @@ export function LobbyClient({
     });
   };
 
+  // Own transitions, so these two buttons can show pending and refuse a
+  // second click. Add bot has no optimistic row, so a double-click used to
+  // add two bots; Start game gave no feedback while the RPC, redirect and
+  // game render ran, so it looked like the click hadn't registered.
+  const [addingBot, startAddBot] = useTransition();
+  const [starting, startStart] = useTransition();
+  const [startError, setStartError] = useState<string | null>(null);
+
   const handleAddBot = () => {
-    startTransition(async () => {
+    if (addingBot) return;
+    startAddBot(async () => {
       await addBotAction(fd({ roomId: room.id, difficulty: "medium" }));
+    });
+  };
+
+  const handleStart = () => {
+    if (starting) return;
+    setStartError(null);
+    startStart(async () => {
+      // On success the action redirects; the transition stays pending
+      // through the navigation, so the button stays locked until the
+      // game page takes over.
+      const res = await startGameAction(fd({ code: room.code }));
+      if (res?.error) setStartError(res.error);
     });
   };
 
@@ -504,27 +525,42 @@ export function LobbyClient({
           // the empty middle — the two buttons stay pinned in place. The
           // Start button keeps one fixed label for the same reason.
           <div className="flex items-center gap-3">
-            <span className="text-[13px] whitespace-nowrap text-ink-soft">
-              {nonHostPlayers.length === 0
-                ? "Waiting for players…"
-                : canStart
-                  ? "Everyone’s ready"
-                  : `${nonHostReadyCount} of ${nonHostPlayers.length} ready`}
+            <span
+              className={`text-[13px] whitespace-nowrap ${startError ? "font-semibold text-pink" : "text-ink-soft"}`}
+              role={startError ? "alert" : undefined}
+            >
+              {startError
+                ? startError
+                : starting
+                  ? "Starting…"
+                  : nonHostPlayers.length === 0
+                    ? "Waiting for players…"
+                    : canStart
+                      ? "Everyone’s ready"
+                      : `${nonHostReadyCount} of ${nonHostPlayers.length} ready`}
             </span>
             <SoftButton
               type="button"
               variant="outline"
               onClick={handleAddBot}
-              disabled={roomIsFull}
+              disabled={roomIsFull || addingBot || starting}
+              aria-busy={addingBot}
+              className={addingBot ? "animate-pulse" : ""}
             >
               <span aria-hidden>+</span> Add bot
             </SoftButton>
-            <form action={startGameAction}>
-              <input type="hidden" name="code" value={room.code} />
-              <SoftButton type="submit" variant="primary" disabled={!canStart}>
-                Start game
-              </SoftButton>
-            </form>
+            {/* Label stays fixed (see above); pending shows as a pulse
+                plus the "Starting…" status text, so nothing shifts. */}
+            <SoftButton
+              type="button"
+              variant="primary"
+              onClick={handleStart}
+              disabled={!canStart || starting}
+              aria-busy={starting}
+              className={starting ? "animate-pulse" : ""}
+            >
+              Start game
+            </SoftButton>
           </div>
         ) : me ? (
           <SoftButton

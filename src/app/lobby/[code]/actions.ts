@@ -153,15 +153,21 @@ export async function setTeamLayoutAction(formData: FormData) {
   revalidateLobby();
 }
 
-export async function startGameAction(formData: FormData) {
+// Returns an error message instead of failing silently: a start that
+// quietly did nothing is what made hosts click twice. Still revalidates
+// on failure, so if the game did start (a race with a second click or
+// tab) the fresh lobby render redirects into it.
+export async function startGameAction(
+  formData: FormData,
+): Promise<{ error: string } | void> {
   const code = String(formData.get("code") ?? "");
-  if (!code) return;
+  if (!code) return { error: "Missing room code." };
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("start_game", { p_code: code });
   if (error || !data) {
     revalidateLobby();
-    return;
+    return { error: error?.message ?? "Couldn't start the game. Try again." };
   }
   redirect(`/game/${data}`);
 }
