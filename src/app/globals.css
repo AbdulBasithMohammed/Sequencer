@@ -12,6 +12,10 @@
   --color-butter: #ffd23f;
   --color-mint: #7bd8b5;
   --color-line-strong: #efe3ce;
+  /* Table rail behind the hand — a toasted step below canvas so white
+     cards read against it (guest feedback: cards blended into the page). */
+  --color-table: #ecdcc3;
+  --color-table-line: #e2ceb0;
 
   --font-display: var(--font-bricolage), system-ui, sans-serif;
   --font-body: var(--font-jakarta), system-ui, sans-serif;
