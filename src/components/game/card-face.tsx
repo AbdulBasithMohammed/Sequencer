@@ -89,7 +89,15 @@ const PIP_LAYOUT: Record<string, PipPos[]> = {
 
 const FACE_RANKS = new Set(["J", "Q", "K"]);
 
-export function CardFace({ card }: { card: string }) {
+export function CardFace({
+  card,
+  edgeClassName = "border-line/60",
+}: {
+  card: string;
+  // Border colour. Board cells keep the soft default; the hand passes a
+  // defined edge so cards read against the table.
+  edgeClassName?: string;
+}) {
   const parts = parseCard(card);
   const color = parts.color === "red" ? "#E5476B" : "var(--color-ink)";
   const isFace = FACE_RANKS.has(parts.rank);
@@ -97,7 +105,7 @@ export function CardFace({ card }: { card: string }) {
 
   return (
     <div
-      className="relative h-full w-full overflow-hidden rounded-[6px] border border-line/60 bg-white"
+      className={`relative h-full w-full overflow-hidden rounded-[6px] border bg-white ${edgeClassName}`}
       style={{ color }}
     >
       <CornerLabel rank={parts.rank} symbol={parts.symbol} position="tl" />

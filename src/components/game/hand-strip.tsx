@@ -31,9 +31,9 @@ const BURN_DURATION_MS = 540;
 const DEAL_DURATION_MS = 520;
 // Opening deal: every card flies in off the deck, one after another.
 const BOOT_DEAL_STAGGER_MS = 90;
-// Table rail insets, in unscaled px within the fan box.
-const RAIL_TOP = 36;
-const RAIL_SIDE = 12;
+// A 2px solid lip under each card reads as its thickness, so white cards
+// separate from the toasted table without needing a surface behind them.
+const CARD_LIP = "0 2px 0 var(--color-card-lip)";
 
 // Hand-tuned ember positions inside the card. Each one flies upward with
 // a slight horizontal drift, scales down, and fades — small visual cue
@@ -157,26 +157,12 @@ export function HandStrip({
       className={`w-full overflow-hidden pt-5 ${disabled ? "opacity-60" : ""}`}
     >
       <div
-        className="relative mx-auto"
+        className="mx-auto"
         style={{
           width: containerWidth * scale,
           height: containerHeight * scale,
         }}
       >
-      {/* Table rail: white cards on the cream page had almost no contrast.
-          It starts below the box top, which is headroom reserved for the
-          hover lift, so a lifted card rises just past the rail's edge. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute rounded-[20px] border border-table-line bg-table"
-        style={{
-          top: RAIL_TOP * scale,
-          left: RAIL_SIDE * scale,
-          right: RAIL_SIDE * scale,
-          bottom: 0,
-          boxShadow: "inset 0 2px 6px rgba(90,60,30,0.15)",
-        }}
-      />
       <div
         className="relative origin-top-left"
         style={{
@@ -261,11 +247,11 @@ export function HandStrip({
                   boxShadow: isSelected
                     ? "0 0 0 2px var(--color-pink), 0 12px 26px rgba(255,92,138,0.35)"
                     : isActive
-                      ? "0 10px 22px rgba(0,0,0,0.2)"
-                      : "0 2px 8px rgba(60,40,20,0.18)",
+                      ? `${CARD_LIP}, 0 10px 22px rgba(60,40,20,0.22)`
+                      : `${CARD_LIP}, 0 4px 10px rgba(60,40,20,0.2)`,
                 }}
               >
-                <CardFace card={card} />
+                <CardFace card={card} edgeClassName="border-card-edge" />
                 {isBurning ? (
                   <div className="pointer-events-none absolute inset-0 overflow-visible">
                     {EMBERS.map((e, k) => (
