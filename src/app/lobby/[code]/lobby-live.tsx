@@ -70,11 +70,16 @@ export function LobbyLive({
   const roomId = initialRoom.id;
   const roomCode = initialRoom.code;
 
+  // Broadcasts must be strictly newer. A snapshot is the authoritative
+  // read, so it also applies at an EQUAL version: that's what lets the
+  // subscribe-time reconcile repair a bad initial render instead of
+  // discarding the fix because nothing had changed since.
   const applyIfNewer = useCallback(
-    (payload: LobbyPayload): boolean => {
+    (payload: LobbyPayload, opts?: { allowEqual?: boolean }): boolean => {
       if (
         typeof payload.version !== "number" ||
-        payload.version <= versionRef.current
+        payload.version < versionRef.current ||
+        (payload.version === versionRef.current && !opts?.allowEqual)
       ) {
         return false;
       }
@@ -101,7 +106,7 @@ export function LobbyLive({
         router.push(`/game/${snap.game_id}`);
         return;
       }
-      applyIfNewer(snap);
+      applyIfNewer(snap, { allowEqual: true });
     } finally {
       reconcileInFlight.current = false;
     }

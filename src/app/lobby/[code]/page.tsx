@@ -3,12 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
-import {
-  type Ban,
-  type Player,
-  type Room,
-  type TokenColor,
-} from "./lobby-client";
+import { type Ban, type Player, type Room } from "./lobby-client";
 import { LobbyLive } from "./lobby-live";
 import { InviteFriendsPanel } from "./invite-friends-panel";
 
@@ -35,93 +30,54 @@ export default async function LobbyPage({
   if (!user) redirect("/auth?mode=signin");
   const supabase = await createClient();
 
-  const { data: room } = await supabase
+  const { data: roomRow } = await supabase
     .from("rooms")
-    .select("*")
+    .select("id")
     .eq("code", normalizedCode)
     .maybeSingle();
-  if (!room) redirect("/play");
+  if (!roomRow) redirect("/play");
 
-  if (room.status === "in_game") {
-    const { data: game } = await supabase
-      .from("games")
-      .select("id")
-      .eq("room_id", room.id)
-      .order("started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (game) redirect(`/game/${game.id}`);
+  // Initial state comes from the same SECURITY DEFINER projection the
+  // client reconciles against and the broadcast trigger ships. This used
+  // to be a direct room_players read embedding profiles(display_name,
+  // is_bot) — which broke when profiles went own-row with is_bot
+  // withheld (20260902090000): the whole query failed, the lobby rendered
+  // with no players (the host missing from their own room), and it stayed
+  // empty until some change bumped the room version.
+  const { data: snapData } = await supabase.rpc("get_lobby_snapshot", {
+    p_room_id: roomRow.id,
+  });
+  const snap = snapData as {
+    version: number;
+    room: Room;
+    players: Player[];
+    game_id: string | null;
+  } | null;
+  // Null when the caller isn't seated in this room.
+  if (!snap) redirect("/play");
+  if (snap.room.status === "in_game" && snap.game_id) {
+    redirect(`/game/${snap.game_id}`);
   }
 
-  const meIsHost = room.host_id === user.id;
+  const roomData = snap.room;
+  const players = snap.players;
+  const meIsHost = roomData.host_id === user.id;
 
-  type PlayerRow = {
-    seat_index: number;
-    user_id: string;
-    team: number | null;
-    ready: boolean;
-    joined_at: string;
-    token_color: TokenColor;
-    bot_difficulty: string | null;
-    profiles: { display_name: string; is_bot: boolean } | null;
-  };
-  type BanRow = {
-    user_id: string;
-    profiles: { display_name: string } | null;
-  };
-
-  const [playersResult, bansResult] = await Promise.all([
-    supabase
-      .from("room_players")
-      .select(
-        "seat_index, user_id, team, ready, joined_at, token_color, bot_difficulty, profiles(display_name, is_bot)",
-      )
-      .eq("room_id", room.id)
-      .order("seat_index"),
-    meIsHost
-      ? supabase
-          .from("room_bans")
-          .select("user_id, profiles(display_name)")
-          .eq("room_id", room.id)
-          .order("banned_at", { ascending: false })
-      : Promise.resolve({ data: null as BanRow[] | null }),
-  ]);
-
-  const players: Player[] = (
-    (playersResult.data as PlayerRow[] | null) ?? []
-  ).map((p) => ({
-    seat_index: p.seat_index,
-    user_id: p.user_id,
-    team: p.team,
-    ready: p.ready,
-    joined_at: p.joined_at,
-    token_color: p.token_color,
-    display_name: p.profiles?.display_name ?? null,
-    is_bot: p.profiles?.is_bot ?? false,
-    bot_difficulty: p.bot_difficulty ?? null,
+  // Host-only ban list, through an RPC for the same reason as the roster:
+  // a direct room_bans read embedding profiles(display_name) now returns
+  // null names, since profiles is readable own-row only.
+  type BanRow = { user_id: string; display_name: string | null };
+  const { data: banRows } = meIsHost
+    ? await supabase.rpc("get_room_bans", { p_room_id: roomData.id })
+    : { data: null };
+  const bans: Ban[] = ((banRows as BanRow[] | null) ?? []).map((b) => ({
+    user_id: b.user_id,
+    display_name: b.display_name,
   }));
-
-  const bans: Ban[] = ((bansResult.data as BanRow[] | null) ?? []).map(
-    (b) => ({
-      user_id: b.user_id,
-      display_name: b.profiles?.display_name ?? null,
-    }),
-  );
-
-  const roomData: Room = {
-    id: room.id,
-    code: room.code,
-    host_id: room.host_id,
-    target_players: room.target_players,
-    team_layout: room.team_layout,
-    status: room.status,
-    turn_seconds: room.turn_seconds,
-    target_sequences: room.target_sequences ?? null,
-  };
 
   // Three-team layouts need a wider page so each card has the same width
   // as in a two-team layout (~340px).
-  const threeTeams = ["1v1v1", "2v2v2", "4v4v4"].includes(room.team_layout);
+  const threeTeams = ["1v1v1", "2v2v2", "4v4v4"].includes(roomData.team_layout);
   const maxWidthClass = threeTeams ? "max-w-[1200px]" : "max-w-[820px]";
 
   return (
@@ -141,7 +97,7 @@ export default async function LobbyPage({
       </header>
 
       <LobbyLive
-        initialVersion={room.version ?? 0}
+        initialVersion={snap.version ?? 0}
         initialRoom={roomData}
         initialPlayers={players}
         bans={bans}
