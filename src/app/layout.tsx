@@ -46,17 +46,18 @@ export const metadata: Metadata = {
     // og:url as the shared link's real address, so a /join/CODE invite
     // could unfurl as (or link back to) the homepage. Without it, they
     // use the URL that was actually shared.
+    //
+    // No title or description either. Set here they'd be inherited too,
+    // so /rules would unfurl with the homepage's copy. Left out, Next
+    // fills og:/twitter: title and description from each page's own
+    // `title` and `description`. Pages must NOT define their own
+    // `openGraph`/`twitter` objects to fix copy: that replaces this whole
+    // block and drops the root opengraph-image / twitter-image files.
     siteName: "Sequencr",
-    title: "Play Sequence Online — Sequencr",
-    description:
-      "Play the classic Sequence board game online with friends. Free, no ads, 2–12 players, browser-native.",
     locale: "en_US",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Play Sequence Online — Sequencr",
-    description:
-      "Play the classic Sequence board game online with friends. Free, no ads, 2–12 players.",
   },
   robots: {
     index: true,
