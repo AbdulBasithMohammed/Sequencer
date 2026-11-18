@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Wordmark } from "@/components/ui/wordmark";
 import { CoffeeButton } from "@/components/ui/coffee-button";
 import { FeedbackModal } from "@/components/feedback-widget";
@@ -46,6 +46,16 @@ export function AppSidebar({
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(href + "/");
   const nav = BASE_NAV.filter((item) => !(item.registeredOnly && isGuest));
+
+  // <Link prefetch> only fires for links that are laid out on screen. On
+  // phones the nav lives in a dropdown that isn't mounted until opened,
+  // so nothing was prefetched and every tab's first tap waited on a full
+  // server render. Warm them once when the shell mounts instead.
+  const router = useRouter();
+  const navHrefs = nav.map((item) => item.href).join("|");
+  useEffect(() => {
+    for (const href of navHrefs.split("|")) router.prefetch(href);
+  }, [router, navHrefs]);
 
   // Auto-close the mobile dropdown when a nav link is clicked — handled
   // on the event instead of a pathname effect so navigation doesn't

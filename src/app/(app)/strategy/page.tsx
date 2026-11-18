@@ -2,7 +2,6 @@ import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/me";
 import { Wordmark } from "@/components/ui/wordmark";
 import { SoftLinkButton } from "@/components/ui/button";
-import { AppShell } from "@/components/app-shell";
 
 // Deliberately does NOT restate the rules — /rules already covers those,
 // and two pages competing for the same query is worse than one. This
@@ -25,8 +24,8 @@ export default async function StrategyPage() {
     <div
       className={
         isAuthed
-          ? "page-enter mx-auto flex w-full max-w-[820px] flex-col px-8 py-8"
-          : "page-enter mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-8 lg:px-12"
+          ? "mx-auto flex w-full max-w-[820px] flex-col px-8 py-8"
+          : "mx-auto flex w-full max-w-[820px] flex-1 flex-col px-6 py-8 lg:px-12"
       }
     >
       {!isAuthed && (
@@ -166,7 +165,9 @@ export default async function StrategyPage() {
     </div>
   );
 
-  return isAuthed ? <AppShell>{content}</AppShell> : content;
+  // The (app) layout supplies the shell for signed-in readers and renders
+  // bare for signed-out ones, so the sidebar stays mounted across tabs.
+  return content;
 }
 
 function Section({
