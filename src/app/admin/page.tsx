@@ -1,9 +1,17 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/me";
 import { createClient } from "@/lib/supabase/server";
 import { TrendChart, SERIES_1, SERIES_2 } from "./charts";
-import { RoomsTable, UsersTable, type RoomRow, type UserRow } from "./tables";
-import { countryLabel, duration, flag, fmtDateTime } from "./format";
+import {
+  FeedbackInbox,
+  UnreadBadge,
+  UnreadCount,
+  type Feedback,
+} from "./feedback";
+import { PlayersList, type UserRow } from "./players";
+import { countryLabel, duration, flag, fmtAgo, fmtDateTime, fmtTime } from "./format";
+import { Card, Empty, Kpi, MiniRow, Pill, SectionHeader } from "./ui";
 
 // Live snapshot, never cached — a stats page showing stale numbers is
 // worse than no stats page.
@@ -30,26 +38,28 @@ type Overview = {
   players_seated: number;
 };
 
+type RoomRow = {
+  code: string;
+  status: string;
+  host_name: string;
+  seats_taken: number;
+  capacity: number;
+  has_live_game: boolean;
+  created_at: string;
+  last_activity_at: string;
+};
+
 type SignupDay = { day: string; registered: number; guests: number };
 type GameDay = { day: string; completed: number };
 type CountryRow = { country: string; players: number };
 
 type GameTotals = {
+  // completed_24h is "today" in Toronto, not a rolling 24 hours.
   completed_total: number;
   completed_24h: number;
   completed_7d: number;
   avg_duration_secs: number;
   games_with_bots: number;
-};
-
-type Feedback = {
-  id: string;
-  author_name: string | null;
-  author_tag: string | null;
-  was_guest: boolean;
-  body: string;
-  page: string | null;
-  created_at: string;
 };
 
 type FeedbackTotals = { total: number; last_24h: number; last_7d: number };
@@ -62,9 +72,20 @@ type Onboarding = {
   nudge_seen: number;
 };
 
-const TABS = ["overview", "feedback", "users"] as const;
-type Tab = (typeof TABS)[number];
+const SECTIONS = [
+  { id: "today", label: "Today" },
+  { id: "feedback", label: "Feedback" },
+  { id: "players", label: "Players" },
+  { id: "growth", label: "Growth" },
+] as const;
+type Section = (typeof SECTIONS)[number]["id"];
+
+// Old bookmarks used ?tab=overview / ?tab=users.
+const ALIASES: Record<string, Section> = { overview: "today", users: "players" };
 const RANGES = [7, 30, 90];
+const USER_CAP = 500;
+
+type Db = Awaited<ReturnType<typeof createClient>>;
 
 export default async function AdminPage({
   searchParams,
@@ -82,105 +103,373 @@ export default async function AdminPage({
   if (!isAdmin) notFound();
 
   const params = await searchParams;
-  const tab: Tab = (TABS as readonly string[]).includes(params.tab ?? "")
-    ? (params.tab as Tab)
-    : "overview";
+  const raw = ALIASES[params.tab ?? ""] ?? params.tab;
+  const section: Section = SECTIONS.some((s) => s.id === raw)
+    ? (raw as Section)
+    : "today";
   const range = RANGES.includes(Number(params.range))
     ? Number(params.range)
     : 30;
 
-  // Always shown, so always fetched. Everything else is per-tab, so a
-  // visit costs one tab's worth of queries rather than all of them.
-  const [overviewRes, fbTotalsRes] = await Promise.all([
-    supabase.rpc("admin_overview"),
-    supabase.rpc("admin_feedback_totals"),
-  ]);
-  const o = (overviewRes.data?.[0] ?? null) as Overview | null;
-  const fbTotals = (fbTotalsRes.data?.[0] ?? null) as FeedbackTotals | null;
+  // Feedback feeds the nav's unread badge on every section, so it's always
+  // fetched. It's small: 30-day retention, capped at 300 rows.
+  const fbRes = await supabase.rpc("admin_feedback", { p_limit: 300 });
+  const feedback = (fbRes.data ?? []) as Feedback[];
+  const fbTimes = feedback.map((f) => f.created_at);
+
+  // One clock for the whole render, handed to client islands so relative
+  // times hydrate with the same text the server sent.
+  // eslint-disable-next-line react-hooks/purity -- server component, renders once
+  const now = Date.now();
+  const ctx = { supabase, userId: user.id, now, feedback, fbTimes };
 
   return (
-    <div className="mx-auto flex w-full max-w-[1180px] flex-col px-6 py-8 sm:px-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h1
-          className="font-display font-bold leading-none"
-          style={{ fontSize: "clamp(30px, 4vw, 40px)", letterSpacing: "-0.03em" }}
+    <div className="mx-auto w-full max-w-[1240px] px-4 pb-16 pt-5 sm:px-6 lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-10 lg:pt-8">
+      <aside className="lg:sticky lg:top-8 lg:self-start">
+        <div className="flex items-center justify-between gap-3 lg:block">
+          <Link
+            href="/admin"
+            className="font-display text-xl font-bold leading-none"
+            style={{ letterSpacing: "-0.03em" }}
+          >
+            Sequencr admin
+          </Link>
+          <p className="text-xs text-ink-soft lg:mt-1.5">
+            {fmtTime(new Date(now).toISOString()).slice(0, 5)} Toronto
+          </p>
+        </div>
+
+        {/* A scrollable pill row on phones, a vertical list on desktop. */}
+        <nav
+          aria-label="Admin sections"
+          className="-mx-4 mt-4 flex gap-1.5 overflow-x-auto px-4 pb-1 lg:mx-0 lg:mt-6 lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0"
         >
-          Admin
-        </h1>
-        <span className="text-xs text-ink-soft">
-          {fmtDateTime(new Date().toISOString())} Toronto
-        </span>
-      </div>
+          {SECTIONS.map((s) => {
+            const active = s.id === section;
+            return (
+              <Link
+                key={s.id}
+                href={s.id === "today" ? "/admin" : `/admin?tab=${s.id}`}
+                aria-current={active ? "page" : undefined}
+                className={`flex shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors lg:rounded-xl lg:px-3 lg:py-2 ${
+                  active
+                    ? "border-ink bg-ink text-canvas"
+                    : "border-line bg-surface text-ink-soft hover:text-ink lg:border-transparent lg:bg-transparent lg:hover:bg-surface"
+                }`}
+              >
+                {s.label}
+                {s.id === "feedback" ? (
+                  <UnreadBadge userId={user.id} timestamps={fbTimes} now={now} />
+                ) : null}
+              </Link>
+            );
+          })}
+        </nav>
 
-      <nav className="mt-5 flex gap-1 border-b border-line">
-        <TabLink current={tab} tab="overview" range={range}>
-          Overview
-        </TabLink>
-        <TabLink current={tab} tab="feedback" range={range}>
-          Feedback
-          {fbTotals?.last_7d ? ` · ${fbTotals.last_7d}` : ""}
-        </TabLink>
-        <TabLink current={tab} tab="users" range={range}>
-          Users · {o?.total_users ?? 0}
-        </TabLink>
-      </nav>
+        <Link
+          href="/play"
+          className="mt-6 hidden text-xs text-ink-soft hover:text-ink lg:block"
+        >
+          ← Back to Sequencr
+        </Link>
+      </aside>
 
-      {tab === "overview" ? (
-        <OverviewTab supabase={supabase} o={o} range={range} />
-      ) : null}
-      {tab === "feedback" ? (
-        <FeedbackTab supabase={supabase} totals={fbTotals} />
-      ) : null}
-      {tab === "users" ? <UsersTab supabase={supabase} /> : null}
+      <main className="mt-6 min-w-0 lg:mt-0">
+        {section === "today" ? <TodaySection {...ctx} /> : null}
+        {section === "feedback" ? <FeedbackSection {...ctx} /> : null}
+        {section === "players" ? <PlayersSection {...ctx} /> : null}
+        {section === "growth" ? <GrowthSection {...ctx} range={range} /> : null}
+
+        <Link
+          href="/play"
+          className="mt-10 block text-xs text-ink-soft hover:text-ink lg:hidden"
+        >
+          ← Back to Sequencr
+        </Link>
+      </main>
     </div>
   );
 }
 
-/* ---------------------------------------------------------------- tabs */
-
-type Db = Awaited<ReturnType<typeof createClient>>;
-
-async function OverviewTab({
-  supabase,
-  o,
-  range,
-}: {
+type Ctx = {
   supabase: Db;
-  o: Overview | null;
-  range: number;
-}) {
-  const [roomsRes, signupsRes, totalsRes, gamesRes, onbRes] = await Promise.all([
-    supabase.rpc("admin_active_rooms"),
-    supabase.rpc("admin_signups_by_day", { p_days: range }),
-    supabase.rpc("admin_game_totals"),
-    supabase.rpc("admin_games_by_day", { p_days: range }),
-    supabase.rpc("admin_onboarding"),
-  ]);
+  userId: string;
+  now: number;
+  feedback: Feedback[];
+  fbTimes: string[];
+};
 
+/* --------------------------------------------------------------- today */
+
+async function TodaySection({ supabase, userId, now, feedback, fbTimes }: Ctx) {
+  const [overviewRes, roomsRes, totalsRes, signupsRes, gamesRes] =
+    await Promise.all([
+      supabase.rpc("admin_overview"),
+      supabase.rpc("admin_active_rooms"),
+      supabase.rpc("admin_game_totals"),
+      supabase.rpc("admin_signups_by_day", { p_days: 14 }),
+      supabase.rpc("admin_games_by_day", { p_days: 14 }),
+    ]);
+  const o = (overviewRes.data?.[0] ?? null) as Overview | null;
   const rooms = (roomsRes.data ?? []) as RoomRow[];
-  const signups = ((signupsRes.data ?? []) as SignupDay[]).slice().reverse();
   const totals = (totalsRes.data?.[0] ?? null) as GameTotals | null;
+  const signups = ((signupsRes.data ?? []) as SignupDay[]).slice().reverse();
   const games = ((gamesRes.data ?? []) as GameDay[]).slice().reverse();
-  const onb = (onbRes.data?.[0] ?? null) as Onboarding | null;
+
+  // Live first, then waiting rooms; each by most recent activity (the RPC's order).
+  const sortedRooms = [...rooms].sort(
+    (a, b) => Number(b.has_live_game) - Number(a.has_live_game),
+  );
   const liveRooms = rooms.filter((r) => r.has_live_game).length;
+  const latest = [...feedback]
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
+    .slice(0, 4);
 
   return (
     <>
-      <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Kpi
-          label="Players"
-          value={o?.total_users ?? 0}
-          sub={`${o?.registered_users ?? 0} registered`}
-        />
-        <Kpi
-          label="New today"
-          value={o?.new_24h ?? 0}
-          sub={`${o?.new_7d ?? 0} this week`}
-        />
+      <SectionHeader
+        title="Today"
+        blurb="What's happening right now and what needs a look."
+      />
+
+      <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Kpi
           label="Playing now"
           value={o?.games_in_progress ?? 0}
-          sub={`${liveRooms} live room${liveRooms === 1 ? "" : "s"}`}
+          sub={`${liveRooms} live room${liveRooms === 1 ? "" : "s"} · ${o?.players_seated ?? 0} seated`}
+        />
+        <Kpi
+          label="New players today"
+          value={o?.new_24h ?? 0}
+          sub={`${o?.new_7d ?? 0} in the last 7 days`}
+          href="/admin?tab=players"
+        />
+        <Kpi
+          label="Games finished today"
+          value={totals?.completed_24h ?? 0}
+          sub={`${totals?.completed_7d ?? 0} in the last 7 days`}
+          href="/admin?tab=growth"
+        />
+        <Kpi
+          label="Unread feedback"
+          accent
+          value={<UnreadCount userId={userId} timestamps={fbTimes} now={now} />}
+          sub="Open the inbox"
+          href="/admin?tab=feedback"
+        />
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card
+          title={`Rooms open · ${rooms.length}`}
+          action={
+            rooms.length ? (
+              <span className="text-xs text-ink-soft">
+                {o?.rooms_waiting ?? 0} waiting
+              </span>
+            ) : null
+          }
+        >
+          {sortedRooms.length ? (
+            <ul className="-my-1 max-h-[300px] overflow-y-auto">
+              {sortedRooms.map((r) => (
+                <li
+                  key={r.code}
+                  className="flex items-center gap-3 border-t border-line py-2 text-sm first:border-t-0"
+                >
+                  <span className="font-mono text-xs">{r.code}</span>
+                  <span className="min-w-0 flex-1 truncate">{r.host_name}</span>
+                  <span className="text-xs tabular-nums text-ink-soft">
+                    {r.seats_taken}/{r.capacity}
+                  </span>
+                  <Pill tone={r.has_live_game ? "dark" : "plain"}>
+                    {r.has_live_game ? "playing" : r.status}
+                  </Pill>
+                  <span
+                    className="hidden w-16 text-right text-xs text-ink-soft sm:inline"
+                    title={fmtDateTime(r.last_activity_at)}
+                  >
+                    {fmtAgo(r.last_activity_at, now)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Empty>No rooms open right now.</Empty>
+          )}
+        </Card>
+
+        <Card
+          title="Latest feedback"
+          action={
+            <Link
+              href="/admin?tab=feedback"
+              className="text-xs text-ink-soft hover:text-ink"
+            >
+              Open inbox →
+            </Link>
+          }
+        >
+          {latest.length ? (
+            <ul className="-my-1">
+              {latest.map((f) => (
+                <li
+                  key={f.id}
+                  className="border-t border-line py-2 first:border-t-0"
+                >
+                  <p className="line-clamp-2 break-words text-sm">{f.body}</p>
+                  <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-soft">
+                    <span>{f.author_name ?? "deleted account"}</span>
+                    {f.was_guest ? <Pill>guest</Pill> : null}
+                    <span>· {fmtAgo(f.created_at, now)}</span>
+                  </p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Empty>No feedback in the last 30 days.</Empty>
+          )}
+        </Card>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card title="Signups · 14 days">
+          <TrendChart
+            height={200}
+            days={signups.map((d) => d.day)}
+            series={[
+              { name: "Registered", color: SERIES_1, values: signups.map((d) => d.registered) },
+              { name: "Guests", color: SERIES_2, values: signups.map((d) => d.guests) },
+            ]}
+            empty="No signups in the last 14 days."
+          />
+        </Card>
+        <Card title="Games finished · 14 days">
+          <TrendChart
+            height={200}
+            days={games.map((d) => d.day)}
+            series={[
+              { name: "Completed", color: SERIES_1, values: games.map((d) => d.completed) },
+            ]}
+            empty="No games finished in the last 14 days."
+          />
+        </Card>
+      </div>
+
+      <p className="mt-6 text-xs leading-relaxed text-ink-soft">
+        Rooms are a live snapshot. Longer trends, onboarding and countries are
+        under{" "}
+        <Link href="/admin?tab=growth" className="underline hover:text-ink">
+          Growth
+        </Link>
+        .
+      </p>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------ feedback */
+
+async function FeedbackSection({ supabase, userId, now, feedback }: Ctx) {
+  const { data } = await supabase.rpc("admin_feedback_totals");
+  const t = (data?.[0] ?? null) as FeedbackTotals | null;
+
+  return (
+    <>
+      <SectionHeader
+        title="Feedback"
+        blurb={`${t?.last_24h ?? 0} today · ${t?.last_7d ?? 0} this week · ${t?.total ?? 0} kept (30-day retention). Registered players first.`}
+      />
+      <div className="mt-5">
+        <FeedbackInbox userId={userId} items={feedback} now={now} />
+      </div>
+      <p className="mt-6 text-xs text-ink-soft">
+        Read state is remembered in this browser only.
+      </p>
+    </>
+  );
+}
+
+/* ------------------------------------------------------------- players */
+
+async function PlayersSection({ supabase, now }: Ctx) {
+  const { data } = await supabase.rpc("admin_user_list", { p_limit: USER_CAP });
+  const users = (data ?? []) as UserRow[];
+
+  return (
+    <>
+      <SectionHeader
+        title="Players"
+        blurb="Every account, newest first. Guests are removed 24 hours after their last sign-in."
+      />
+      <div className="mt-5">
+        <PlayersList rows={users} now={now} capped={users.length >= USER_CAP} />
+      </div>
+    </>
+  );
+}
+
+/* -------------------------------------------------------------- growth */
+
+async function GrowthSection({ supabase, range }: Ctx & { range: number }) {
+  const [overviewRes, totalsRes, signupsRes, gamesRes, onbRes, countriesRes] =
+    await Promise.all([
+      supabase.rpc("admin_overview"),
+      supabase.rpc("admin_game_totals"),
+      supabase.rpc("admin_signups_by_day", { p_days: range }),
+      supabase.rpc("admin_games_by_day", { p_days: range }),
+      supabase.rpc("admin_onboarding"),
+      supabase.rpc("admin_countries"),
+    ]);
+  const o = (overviewRes.data?.[0] ?? null) as Overview | null;
+  const totals = (totalsRes.data?.[0] ?? null) as GameTotals | null;
+  const signups = ((signupsRes.data ?? []) as SignupDay[]).slice().reverse();
+  const games = ((gamesRes.data ?? []) as GameDay[]).slice().reverse();
+  const onb = (onbRes.data?.[0] ?? null) as Onboarding | null;
+  const countries = ((countriesRes.data ?? []) as CountryRow[]).filter(
+    (c) => c.country !== "??",
+  );
+  const totalKnown = countries.reduce((s, c) => s + c.players, 0);
+  const botPct =
+    totals?.completed_total
+      ? Math.round((totals.games_with_bots / totals.completed_total) * 100)
+      : 0;
+
+  return (
+    <>
+      <SectionHeader
+        title="Growth"
+        blurb="How the player base and play volume are trending."
+      >
+        <div className="flex gap-1" role="group" aria-label="Chart range">
+          {RANGES.map((r) => (
+            <Link
+              key={r}
+              href={`/admin?tab=growth&range=${r}`}
+              scroll={false}
+              aria-current={r === range ? "true" : undefined}
+              className={`rounded-full border px-3 py-1 text-xs ${
+                r === range
+                  ? "border-ink bg-ink text-canvas"
+                  : "border-line bg-surface text-ink-soft hover:text-ink"
+              }`}
+            >
+              {r} days
+            </Link>
+          ))}
+        </div>
+      </SectionHeader>
+
+      <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <Kpi
+          label="Registered players"
+          value={o?.registered_users ?? 0}
+          sub={`${o?.total_users ?? 0} accounts in all`}
+        />
+        <Kpi
+          label="Guests right now"
+          value={o?.guest_users ?? 0}
+          sub={`${o?.bot_users ?? 0} bot accounts`}
         />
         <Kpi
           label="Games finished"
@@ -191,41 +480,21 @@ async function OverviewTab({
               : "none yet"
           }
         />
+        <Kpi
+          label="Games with a bot"
+          value={`${botPct}%`}
+          sub={`${totals?.games_with_bots ?? 0} games`}
+        />
       </div>
 
-      <div className="mt-5 flex items-center justify-end gap-1">
-        {RANGES.map((r) => (
-          <a
-            key={r}
-            href={`/admin?tab=overview&range=${r}`}
-            className={`rounded-full border px-3 py-1 text-xs ${
-              r === range
-                ? "border-line bg-ink text-canvas"
-                : "border-line text-ink-soft hover:text-ink"
-            }`}
-          >
-            {r} days
-          </a>
-        ))}
-      </div>
-
-      {/* Full width, not side by side. At half width the date axis had
-          roughly 54px per label to work with, which is why it was
-          illegible — the columns need the whole row. */}
-      <Card title={`Signups · ${range} days`} className="mt-2">
+      {/* Full width: at half width a 30- or 90-day axis has too little
+          room per date label to stay legible. */}
+      <Card title={`Signups · ${range} days`} className="mt-4">
         <TrendChart
           days={signups.map((d) => d.day)}
           series={[
-            {
-              name: "Registered",
-              color: SERIES_1,
-              values: signups.map((d) => d.registered),
-            },
-            {
-              name: "Guests",
-              color: SERIES_2,
-              values: signups.map((d) => d.guests),
-            },
+            { name: "Registered", color: SERIES_1, values: signups.map((d) => d.registered) },
+            { name: "Guests", color: SERIES_2, values: signups.map((d) => d.guests) },
           ]}
           empty={`No signups in the last ${range} days.`}
         />
@@ -235,306 +504,51 @@ async function OverviewTab({
         <TrendChart
           days={games.map((d) => d.day)}
           series={[
-            {
-              name: "Completed",
-              color: SERIES_1,
-              values: games.map((d) => d.completed),
-            },
+            { name: "Completed", color: SERIES_1, values: games.map((d) => d.completed) },
           ]}
-          empty="Nothing recorded yet — tracking starts from the deploy that added the counter."
+          empty={`No games finished in the last ${range} days.`}
         />
       </Card>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Card title="Who's signed up">
+        {/* Denominator is every non-bot account, including everyone who
+            predates onboarding — so these climb as old accounts come back,
+            and "finished the tour" is deliberately net of skips. */}
+        <Card title="Onboarding">
           <MiniRow
-            label="Registered"
-            value={o?.registered_users ?? 0}
-            of={o?.total_users ?? 0}
+            label="Finished the tour"
+            value={(onb?.tour_seen ?? 0) - (onb?.tour_skipped ?? 0)}
+            of={onb?.eligible ?? 0}
           />
-          <MiniRow
-            label="Guests"
-            value={o?.guest_users ?? 0}
-            of={o?.total_users ?? 0}
-          />
-          <MiniRow
-            label="Bots"
-            value={o?.bot_users ?? 0}
-            of={o?.total_users ?? 0}
-          />
-        </Card>
-
-        <Card title="Rooms right now">
-          <MiniRow
-            label="Waiting in lobby"
-            value={o?.rooms_waiting ?? 0}
-            of={o?.rooms_total ?? 0}
-          />
-          <MiniRow
-            label="In game"
-            value={o?.rooms_in_game ?? 0}
-            of={o?.rooms_total ?? 0}
-          />
-          <MiniRow
-            label="Seated players"
-            value={o?.players_seated ?? 0}
-            of={o?.players_seated ?? 0}
-          />
-        </Card>
-      </div>
-
-      {/* Denominator is every non-bot account, including everyone who
-          predates onboarding — so these climb as old accounts come back,
-          and "finished the tour" is deliberately net of skips. */}
-      <Card title="Onboarding" className="mt-4">
-        <MiniRow
-          label="Finished the tour"
-          value={(onb?.tour_seen ?? 0) - (onb?.tour_skipped ?? 0)}
-          of={onb?.eligible ?? 0}
-        />
-        <MiniRow
-          label="Skipped it"
-          value={onb?.tour_skipped ?? 0}
-          of={onb?.eligible ?? 0}
-        />
-        <MiniRow
-          label="Played a first game"
-          value={onb?.coach_done ?? 0}
-          of={onb?.eligible ?? 0}
-        />
-        <MiniRow
-          label="Saw the feedback nudge"
-          value={onb?.nudge_seen ?? 0}
-          of={onb?.eligible ?? 0}
-        />
-      </Card>
-
-      {rooms.length > 0 ? (
-        <Card title={`Live rooms · ${rooms.length}`} className="mt-4">
-          <RoomsTable rows={rooms} />
-        </Card>
-      ) : null}
-
-      <p className="mt-8 text-xs leading-relaxed text-ink-soft">
-        Rooms and games are a live snapshot — finished games are deleted 5
-        minutes after they end, and guests disappear 24 hours after their last
-        sign-in. Only the daily completed-game counter is durable.
-      </p>
-    </>
-  );
-}
-
-async function FeedbackTab({
-  supabase,
-  totals,
-}: {
-  supabase: Db;
-  totals: FeedbackTotals | null;
-}) {
-  const { data } = await supabase.rpc("admin_feedback", { p_limit: 200 });
-  const feedback = (data ?? []) as Feedback[];
-
-  return (
-    <>
-      <div className="mt-6 grid grid-cols-3 gap-3">
-        <Kpi label="All time" value={totals?.total ?? 0} sub="kept 30 days" />
-        <Kpi label="Last 24h" value={totals?.last_24h ?? 0} />
-        <Kpi label="This week" value={totals?.last_7d ?? 0} />
-      </div>
-
-      {feedback.length ? (
-        <ul className="mt-4 flex flex-col gap-2">
-          {feedback.map((f, i) => (
-            <li key={f.id}>
-              {/* Rows arrive registered-first; mark where guest feedback
-                  starts so the low-priority pile is obvious without
-                  reading each byline. */}
-              {f.was_guest && !feedback[i - 1]?.was_guest ? (
-                <p className="mb-2 mt-5 text-[11px] uppercase tracking-wide text-ink-soft">
-                  From guests · lower priority
-                </p>
-              ) : null}
-              <div
-                className={`rounded-2xl border border-line px-4 py-3 ${
-                  f.was_guest ? "" : "bg-surface"
-                }`}
-              >
-                <p
-                  className={`whitespace-pre-wrap text-sm ${
-                    f.was_guest ? "text-ink-soft" : ""
-                  }`}
-                >
-                  {f.body}
-                </p>
-                <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[11px] text-ink-soft">
-                  <span>{f.author_name ?? "deleted account"}</span>
-                  {f.author_tag ? (
-                    <span className="font-mono">#{f.author_tag}</span>
-                  ) : null}
-                  {f.was_guest ? (
-                    <span className="rounded-full border border-line px-1.5 py-0.5 text-[10px] uppercase">
-                      guest
-                    </span>
-                  ) : null}
-                  <span>·</span>
-                  <span>{fmtDateTime(f.created_at)}</span>
-                  {f.page ? (
-                    <>
-                      <span>·</span>
-                      <span className="font-mono">{f.page}</span>
-                    </>
-                  ) : null}
-                </p>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Card title="Nothing yet" className="mt-4">
-          <p className="text-sm text-ink-soft">
-            No feedback has come in. The button sits in the sidebar on every
-            signed-in page.
+          <MiniRow label="Skipped it" value={onb?.tour_skipped ?? 0} of={onb?.eligible ?? 0} />
+          <MiniRow label="Played a first game" value={onb?.coach_done ?? 0} of={onb?.eligible ?? 0} />
+          <MiniRow label="Saw the feedback nudge" value={onb?.nudge_seen ?? 0} of={onb?.eligible ?? 0} />
+          <p className="mt-2 text-xs text-ink-soft">
+            Out of {onb?.eligible ?? 0} non-bot accounts.
           </p>
         </Card>
-      )}
-    </>
-  );
-}
 
-async function UsersTab({ supabase }: { supabase: Db }) {
-  const [usersRes, countriesRes] = await Promise.all([
-    supabase.rpc("admin_user_list", { p_limit: 300 }),
-    supabase.rpc("admin_countries"),
-  ]);
-  const users = (usersRes.data ?? []) as UserRow[];
-  const countries = (countriesRes.data ?? []) as CountryRow[];
-  const known = countries.filter((c) => c.country !== "??");
-  const totalKnown = known.reduce((s, c) => s + c.players, 0);
-
-  return (
-    <>
-      {known.length ? (
-        <Card title={`Countries · ${known.length}`} className="mt-6">
-          {known.slice(0, 8).map((c) => (
-            <MiniRow
-              key={c.country}
-              label={`${flag(c.country)} ${countryLabel(c.country)}`}
-              value={c.players}
-              of={totalKnown}
-            />
-          ))}
+        <Card title={`Countries · ${countries.length}`}>
+          {countries.length ? (
+            countries.slice(0, 8).map((c) => (
+              <MiniRow
+                key={c.country}
+                label={`${flag(c.country)} ${countryLabel(c.country)}`}
+                value={c.players}
+                of={totalKnown}
+              />
+            ))
+          ) : (
+            <Empty>No countries recorded yet.</Empty>
+          )}
         </Card>
-      ) : null}
-
-      <Card title={`All users · ${users.length}`} className="mt-4">
-        <p className="-mt-1 mb-2 text-[11px] text-ink-soft">
-          Click any column heading to sort.
-        </p>
-        <UsersTable rows={users} />
-        <p className="mt-3 text-xs text-ink-soft">
-          Country is captured from the edge on a signed-in visit and set once.
-          Accounts that predate this show — until their next visit; there is no
-          historical geo to backfill from.
-        </p>
-      </Card>
-    </>
-  );
-}
-
-/* ------------------------------------------------------------ elements */
-
-function TabLink({
-  current,
-  tab,
-  range,
-  children,
-}: {
-  current: Tab;
-  tab: Tab;
-  range: number;
-  children: React.ReactNode;
-}) {
-  const active = current === tab;
-  return (
-    <a
-      href={`/admin?tab=${tab}&range=${range}`}
-      className={`-mb-px border-b-2 px-3 py-2 text-sm ${
-        active
-          ? "border-ink font-medium text-ink"
-          : "border-transparent text-ink-soft hover:text-ink"
-      }`}
-    >
-      {children}
-    </a>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: number;
-  sub?: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-line bg-surface px-4 py-4">
-      <div className="text-xs text-ink-soft">{label}</div>
-      <div
-        className="mt-1 font-display font-bold leading-none"
-        style={{ fontSize: "34px", letterSpacing: "-0.03em" }}
-      >
-        {value}
       </div>
-      {sub ? <div className="mt-1.5 text-xs text-ink-soft">{sub}</div> : null}
-    </div>
-  );
-}
 
-function Card({
-  title,
-  children,
-  className = "",
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      className={`rounded-3xl border border-line bg-surface px-5 py-4 ${className}`}
-    >
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-soft">
-        {title}
-      </h2>
-      <div className="mt-3">{children}</div>
-    </section>
-  );
-}
-
-function MiniRow({
-  label,
-  value,
-  of,
-}: {
-  label: string;
-  value: number;
-  of: number;
-}) {
-  const pct = of > 0 ? Math.round((value / of) * 100) : 0;
-  return (
-    <div className="flex items-center gap-3 py-1.5">
-      <span className="w-44 shrink-0 truncate text-sm">{label}</span>
-      <span className="w-10 shrink-0 text-sm font-semibold tabular-nums">
-        {value}
-      </span>
-      <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-line">
-        <span
-          className="block h-full rounded-full bg-ink"
-          style={{ width: `${pct}%` }}
-        />
-      </span>
-    </div>
+      <p className="mt-6 text-xs leading-relaxed text-ink-soft">
+        Finished games are deleted 5 minutes after they end and guests 24
+        hours after their last sign-in; only the daily completed-game counter
+        is durable. Days are Toronto days.
+      </p>
+    </>
   );
 }

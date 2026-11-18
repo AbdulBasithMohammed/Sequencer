@@ -55,3 +55,28 @@ export function countryLabel(cc: string | null) {
     return cc;
   }
 }
+
+export function fmtDate(iso: string | null) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-CA", {
+    timeZone: TZ,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+// "3h ago". `now` is passed in (from the server render) rather than read
+// here, so a client component hydrates with the same text the server sent.
+export function fmtAgo(iso: string | null, now: number) {
+  if (!iso) return "never";
+  const secs = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  return fmtDate(iso);
+}

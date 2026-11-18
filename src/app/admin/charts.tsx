@@ -21,7 +21,7 @@ import { useEffect, useRef, useState } from "react";
 export const SERIES_1 = "#5b7cfa";
 export const SERIES_2 = "#ff5c8a";
 
-const H = 240;
+const DEFAULT_H = 240;
 const M = { top: 14, right: 10, bottom: 30, left: 38 };
 
 export type Series = { name: string; color: string; values: number[] };
@@ -48,10 +48,12 @@ export function TrendChart({
   days,
   series,
   empty,
+  height: H = DEFAULT_H,
 }: {
   days: string[];
   series: Series[];
   empty: string;
+  height?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(0);
