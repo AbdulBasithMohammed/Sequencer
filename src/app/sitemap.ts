@@ -2,6 +2,9 @@ import type { MetadataRoute } from "next";
 
 const SITE_URL = "https://sequencr.app";
 
+// Content pages only. /guest and /auth used to be listed here, which
+// contradicted itself once they went noindex — a sitemap entry asks Google
+// to index a page. Login forms have nothing to rank for anyway.
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
   return [
@@ -28,18 +31,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.7,
-    },
-    {
-      url: `${SITE_URL}/guest`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
-    {
-      url: `${SITE_URL}/auth`,
-      lastModified: now,
-      changeFrequency: "monthly",
-      priority: 0.5,
     },
   ];
 }

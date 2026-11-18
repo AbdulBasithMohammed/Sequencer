@@ -1,4 +1,6 @@
-import { redirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
+
+// 308 rather than the default 307 — see the note in ../login/page.tsx.
 
 export default async function SignupRedirect({
   searchParams,
@@ -9,7 +11,7 @@ export default async function SignupRedirect({
   const next = params.next;
   const safe =
     next && next.startsWith("/") && !next.startsWith("//") ? next : null;
-  redirect(
+  permanentRedirect(
     safe ? `/auth?mode=signup&next=${encodeURIComponent(safe)}` : "/auth?mode=signup",
   );
 }

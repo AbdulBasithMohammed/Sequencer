@@ -64,9 +64,10 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  alternates: {
-    canonical: "/",
-  },
+  // No canonical here on purpose. Metadata merges shallowly, so a
+  // canonical set on the root layout is inherited by every page that
+  // doesn't override it — which had /guest, /auth and /join/* all
+  // declaring themselves to be the homepage. Each page sets its own.
   category: "game",
 };
 

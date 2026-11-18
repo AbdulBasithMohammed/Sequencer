@@ -4,6 +4,10 @@ import { ForgotForm } from "./forgot-form";
 
 export const metadata = {
   title: "Reset your password",
+  // Login wall — thin, duplicated across every entry point, and useless
+  // in results. Keep it out of the index so the content pages carry the
+  // site's search presence instead.
+  robots: { index: false, follow: true },
 };
 
 export default function ForgotPage() {

@@ -6,6 +6,13 @@ import { SoftLinkButton } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = {
+  title: "Join a room",
+  // One URL per room code, and the room outlives the invite by minutes.
+  // Indexing these would fill results with dead codes.
+  robots: { index: false, follow: false },
+};
+
 type RoomLookup = {
   status: string;
   target_players: number;

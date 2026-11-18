@@ -6,6 +6,13 @@ import { SoftLinkButton } from "@/components/ui/button";
 import { SoftPill } from "@/components/ui/pill";
 import { CoffeeButton } from "@/components/ui/coffee-button";
 
+// Title, description and OG tags all come from the root layout — this is
+// the page they were written for. Only the canonical is restated, since
+// the layout no longer sets one (it leaked to every child route).
+export const metadata = {
+  alternates: { canonical: "/" },
+};
+
 const FEATURES = [
   ["Cozy rooms", "Invite friends with a 6-character code."],
   ["Play as guest", "Pick a nickname, jump in. No account needed."],

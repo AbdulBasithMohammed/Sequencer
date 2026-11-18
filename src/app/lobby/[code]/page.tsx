@@ -14,6 +14,11 @@ import { InviteFriendsPanel } from "./invite-friends-panel";
 
 export const metadata = {
   title: "Room",
+  // Belt and braces only: a signed-out crawler is bounced to /auth before
+  // this ever renders, so nothing external reads this tag today. Kept so
+  // the page is still correct if that redirect is ever relaxed — rooms are
+  // reaped minutes after they end, so these must never be indexed.
+  robots: { index: false, follow: false },
 };
 
 export default async function LobbyPage({

@@ -10,6 +10,10 @@ import { QuoteCycler } from "@/components/ui/quote-cycler";
 
 export const metadata = {
   title: "Sign in",
+  // Login wall — thin, duplicated across every entry point, and useless
+  // in results. Keep it out of the index so the content pages carry the
+  // site's search presence instead.
+  robots: { index: false, follow: true },
 };
 
 const URL_MESSAGES: Record<string, string> = {

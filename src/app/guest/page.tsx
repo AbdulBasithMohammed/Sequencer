@@ -6,6 +6,10 @@ import { GuestSignInForm } from "./guest-form";
 
 export const metadata = {
   title: "Play as guest",
+  // Login wall — thin, duplicated across every entry point, and useless
+  // in results. Keep it out of the index so the content pages carry the
+  // site's search presence instead.
+  robots: { index: false, follow: true },
 };
 
 export default async function GuestPage({
