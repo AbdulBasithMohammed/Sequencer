@@ -103,7 +103,16 @@ function teamsForLayout(layout: string): number[] {
 
 type OptimisticAction =
   | { type: "set_team"; userId: string; team: number }
-  | { type: "swap_teams"; userA: string; userB: string }
+  // Absolute teams captured when the swap is dispatched. useOptimistic
+  // re-runs the reducer on every new base state, so a relative "swap A
+  // and B" flipped them back and forth as broadcasts arrived mid-flight.
+  | {
+      type: "swap_teams";
+      userA: string;
+      teamA: number | null;
+      userB: string;
+      teamB: number | null;
+    }
   | { type: "set_ready"; userId: string; ready: boolean }
   | { type: "set_token_color"; userId: string; color: TokenColor }
   | { type: "set_bot_difficulty"; userId: string; difficulty: string }
@@ -115,16 +124,12 @@ function playersReducer(state: Player[], action: OptimisticAction): Player[] {
       return state.map((p) =>
         p.user_id === action.userId ? { ...p, team: action.team } : p,
       );
-    case "swap_teams": {
-      const a = state.find((p) => p.user_id === action.userA);
-      const b = state.find((p) => p.user_id === action.userB);
-      if (!a || !b) return state;
+    case "swap_teams":
       return state.map((p) => {
-        if (p.user_id === action.userA) return { ...p, team: b.team };
-        if (p.user_id === action.userB) return { ...p, team: a.team };
+        if (p.user_id === action.userA) return { ...p, team: action.teamA };
+        if (p.user_id === action.userB) return { ...p, team: action.teamB };
         return p;
       });
-    }
     case "set_ready":
       return state.map((p) =>
         p.user_id === action.userId ? { ...p, ready: action.ready } : p,
@@ -363,8 +368,13 @@ export function LobbyClient({
 
   const handleSwapTeams = (userA: string, userB: string) => {
     if (userA === userB) return;
+    const a = optimisticPlayers.find((p) => p.user_id === userA);
+    const b = optimisticPlayers.find((p) => p.user_id === userB);
+    if (!a || !b) return;
+    const teamA = b.team;
+    const teamB = a.team;
     startTransition(async () => {
-      addOptimistic({ type: "swap_teams", userA, userB });
+      addOptimistic({ type: "swap_teams", userA, teamA, userB, teamB });
       await swapTeamsAction(fd({ roomId: room.id, userA, userB }));
     });
   };
