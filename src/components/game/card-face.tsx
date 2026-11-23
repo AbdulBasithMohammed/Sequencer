@@ -94,8 +94,8 @@ export function CardFace({
   edgeClassName = "border-line/60",
 }: {
   card: string;
-  // Border colour. Board cells keep the soft default; the hand passes a
-  // defined edge so cards read against the table.
+  // Border colour. The board passes the cell edge and the hand the
+  // stronger card edge; the soft default is for anything else.
   edgeClassName?: string;
 }) {
   const parts = parseCard(card);

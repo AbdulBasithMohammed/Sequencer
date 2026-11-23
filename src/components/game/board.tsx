@@ -126,6 +126,11 @@ function Cell({
   const isLiveMatch = isMatch && !preview;
   const previewOutline = "rgba(27, 21, 48, 0.55)";
   const previewGlow = "rgba(27, 21, 48, 0.18)";
+  // Lip + drop shadow so cells read against the canvas. The board is
+  // rendered portrait and rotated 90° clockwise by the game page, so a
+  // local +x offset is what lands *below* the cell on screen.
+  const cellShadow =
+    "2px 0 0 var(--color-cell-lip), 4px 0 8px rgba(60,40,20,0.2)";
   return (
     <div
       className={`relative rounded-[6px] ${onClick ? "cursor-pointer" : ""} ${isLiveMatch ? "animate-[pulse_1.4s_ease-in-out_infinite]" : ""}`}
@@ -146,17 +151,21 @@ function Cell({
               ? 0
               : undefined,
         boxShadow: isLiveMatch
-          ? "0 0 14px rgba(255,92,138,0.55)"
+          ? `0 0 14px rgba(255,92,138,0.55), ${cellShadow}`
           : isPreviewMatch
-            ? `0 0 10px ${previewGlow}`
+            ? `0 0 10px ${previewGlow}, ${cellShadow}`
             : showLast
-              ? `0 0 12px ${lastGlow}`
-              : undefined,
+              ? `0 0 12px ${lastGlow}, ${cellShadow}`
+              : cellShadow,
         zIndex: isLiveMatch ? 5 : isPreviewMatch ? 4 : showLast ? 3 : undefined,
       }}
       onClick={onClick}
     >
-      {wild ? <CornerCell row={row} col={col} /> : <CardFace card={card} />}
+      {wild ? (
+        <CornerCell row={row} col={col} />
+      ) : (
+        <CardFace card={card} edgeClassName="border-cell-edge" />
+      )}
       {chip.team !== null && (
         <ChipOverlay team={chip.team} completed={chip.sequence_ids.length > 0} />
       )}
@@ -213,7 +222,7 @@ function CornerCell({ row, col }: { row: number; col: number }) {
         `;
   return (
     <div
-      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[6px] border border-line/70"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-[6px] border border-cell-edge"
       style={{
         background: `${glow}, var(--color-canvas)`,
       }}

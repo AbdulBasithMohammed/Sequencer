@@ -31,9 +31,10 @@ const BURN_DURATION_MS = 540;
 const DEAL_DURATION_MS = 520;
 // Opening deal: every card flies in off the deck, one after another.
 const BOOT_DEAL_STAGGER_MS = 90;
-// A 2px solid lip under each card reads as its thickness, so white cards
-// separate from the toasted table without needing a surface behind them.
-const CARD_LIP = "0 2px 0 var(--color-card-lip)";
+// A 3px solid lip under each card reads as its thickness, and with the
+// edge and drop shadow it's what separates white cards from the cream
+// canvas — there's no table surface behind the hand.
+const CARD_LIP = "0 3px 0 var(--color-card-lip)";
 
 // Hand-tuned ember positions inside the card. Each one flies upward with
 // a slight horizontal drift, scales down, and fades — small visual cue
@@ -247,8 +248,8 @@ export function HandStrip({
                   boxShadow: isSelected
                     ? "0 0 0 2px var(--color-pink), 0 12px 26px rgba(255,92,138,0.35)"
                     : isActive
-                      ? `${CARD_LIP}, 0 10px 22px rgba(60,40,20,0.22)`
-                      : `${CARD_LIP}, 0 4px 10px rgba(60,40,20,0.2)`,
+                      ? `${CARD_LIP}, 0 16px 30px rgba(60,40,20,0.34)`
+                      : `${CARD_LIP}, 0 10px 20px rgba(60,40,20,0.3)`,
                 }}
               >
                 <CardFace card={card} edgeClassName="border-card-edge" />

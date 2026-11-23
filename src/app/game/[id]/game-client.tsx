@@ -587,12 +587,11 @@ export function GameClient({
         // right and sat visibly off-center.
         className="-mx-6 lg:-mx-10"
       >
-      {/* Table surface behind board + hand only. White cards on the cream
-          page had almost no contrast (guest feedback); toasting the whole
-          page instead made the lobby → game hop feel like a theme change.
-          Full-bleed on phones, a rounded table from sm up. */}
+      {/* Board + hand column. No surface behind it: the cards carry their
+          own contrast against the canvas (edge, lip and drop shadow — see
+          the card tokens in globals.css). */}
       <div
-        className="mx-auto bg-table sm:rounded-[28px] sm:border sm:border-card-lip/60"
+        className="mx-auto"
         style={{
           width: `calc(${BOARD_WIDTH} + 2 * ${TABLE_PAD})`,
           maxWidth: "100%",

@@ -12,12 +12,15 @@
   --color-butter: #ffd23f;
   --color-mint: #7bd8b5;
   --color-line-strong: #efe3ce;
-  /* Game table. White cards on the cream canvas had almost no contrast
-     (guest feedback), so board + hand sit on a toasted surface and hand
-     cards carry a defined edge plus a thickness lip. */
-  --color-table: #ecdcc3;
-  --color-card-edge: #cdb690;
-  --color-card-lip: #d9c4a2;
+  /* Card contrast. White cards on the cream canvas had almost no contrast
+     (guest feedback). Cards sit straight on the canvas and carry it
+     themselves: a defined edge, a solid thickness lip under the card, and
+     a drop shadow. Hand cards get the full weight; board cells a lighter
+     pair, since 100 of them 3px apart would muddy at hand strength. */
+  --color-card-edge: #b39a6f;
+  --color-card-lip: #cdb690;
+  --color-cell-edge: #bfa77d;
+  --color-cell-lip: #d9c4a2;
 
   --font-display: var(--font-bricolage), system-ui, sans-serif;
   --font-body: var(--font-jakarta), system-ui, sans-serif;
