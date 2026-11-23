@@ -120,12 +120,12 @@ function Cell({
   const showLast = isLast && !isMatch;
   const lastOutline = "rgba(255, 210, 63, 0.95)";
   const lastGlow = "rgba(255, 210, 63, 0.7)";
-  // Off-turn preview: still show *where* the selected card could go, but
-  // with a muted ink halo so it doesn't read as a callable action.
+  // Off-turn preview: still show *where* the selected card could go, as a
+  // dashed "ghost chip" in the cell (see GhostChip). It sits inside the
+  // cell, so the cell edge and shadow can't swallow it the way a dashed
+  // outline got lost, and it looks nothing like the pink live pulse.
   const isPreviewMatch = isMatch && preview;
   const isLiveMatch = isMatch && !preview;
-  const previewOutline = "rgba(27, 21, 48, 0.55)";
-  const previewGlow = "rgba(27, 21, 48, 0.18)";
   // Lip + drop shadow so cells read against the canvas. The board is
   // rendered portrait and rotated 90° clockwise by the game page, so a
   // local +x offset is what lands *below* the cell on screen.
@@ -138,26 +138,16 @@ function Cell({
         aspectRatio: CELL_ASPECT,
         outline: isLiveMatch
           ? "2px solid var(--color-pink)"
-          : isPreviewMatch
-            ? `1.5px dashed ${previewOutline}`
-            : showLast
-              ? `1.5px solid ${lastOutline}`
-              : undefined,
-        outlineOffset: isLiveMatch
-          ? 1
-          : isPreviewMatch
-            ? 1
-            : showLast
-              ? 0
-              : undefined,
+          : showLast
+            ? `1.5px solid ${lastOutline}`
+            : undefined,
+        outlineOffset: isLiveMatch ? 1 : showLast ? 0 : undefined,
         boxShadow: isLiveMatch
           ? `0 0 14px rgba(255,92,138,0.55), ${cellShadow}`
-          : isPreviewMatch
-            ? `0 0 10px ${previewGlow}, ${cellShadow}`
-            : showLast
-              ? `0 0 12px ${lastGlow}, ${cellShadow}`
-              : cellShadow,
-        zIndex: isLiveMatch ? 5 : isPreviewMatch ? 4 : showLast ? 3 : undefined,
+          : showLast
+            ? `0 0 12px ${lastGlow}, ${cellShadow}`
+            : cellShadow,
+        zIndex: isLiveMatch ? 5 : showLast ? 3 : undefined,
       }}
       onClick={onClick}
     >
@@ -169,6 +159,7 @@ function Cell({
       {chip.team !== null && (
         <ChipOverlay team={chip.team} completed={chip.sequence_ids.length > 0} />
       )}
+      {isPreviewMatch && <GhostChip around={chip.team !== null} />}
     </div>
   );
 }
@@ -240,6 +231,26 @@ function CornerCell({ row, col }: { row: number; col: number }) {
         SQR
       </span>
     </div>
+  );
+}
+
+// Off-turn preview marker. On an empty cell it's a dashed, lightly filled
+// chip outline where yours would land. When the match is an opponent's
+// chip (one-eyed jack preview), it's a dashed ring around that chip
+// instead, so the chip itself stays visible.
+function GhostChip({ around }: { around: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute left-1/2 top-1/2 rounded-full"
+      style={{
+        width: around ? "80%" : "62%",
+        aspectRatio: "1",
+        border: "2px dashed rgba(27, 21, 48, 0.6)",
+        background: around ? undefined : "rgba(27, 21, 48, 0.06)",
+        transform: "translate(-50%, -50%)",
+      }}
+    />
   );
 }
 
